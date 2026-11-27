@@ -156,7 +156,7 @@ fun FiltersScreen(modifier: Modifier) {
             title = { Text("필터 목록 추가") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("hosts 형식이나 AdGuard/uBlock 형식(||domain^) 목록 주소를 입력하세요.", style = MaterialTheme.typography.bodySmall)
+                    Text("hosts 형식이나 필터 규칙 형식(||domain^) 목록 주소를 입력하세요.", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(name, { name = it }, label = { Text("이름") }, singleLine = true)
                     OutlinedTextField(url, { url = it }, label = { Text("URL") }, singleLine = true)
                     Text("분류 (앱별 설정에서 따로 켜고 끌 수 있어요)", style = MaterialTheme.typography.bodySmall)

@@ -75,7 +75,7 @@ Secrets 4개를 등록한 뒤 **Actions › Release › Run workflow**에서 버
 
 ## 🧩 크롬 확장 프로그램
 
-AdGuard 같은 크롬(크로미움) 광고 차단 확장 프로그램입니다. Manifest V3 기반이라 Chrome, Edge, Whale, Brave 등에서 동작합니다.
+크롬(크로미움) 광고 차단 확장 프로그램입니다. Manifest V3 기반이라 Chrome, Edge, Whale, Brave 등에서 동작합니다.
 
 ## 기능
 
@@ -83,7 +83,7 @@ AdGuard 같은 크롬(크로미움) 광고 차단 확장 프로그램입니다. 
 - **요소 숨김**: 광고 자리(`ins.adsbygoogle`, `div-gpt-ad` 등)를 페이지에서 숨김
 - **요소 선택기**: 팝업에서 🎯 버튼을 누르고 거슬리는 요소를 클릭하면 그 사이트에서 계속 숨김
 - **사이트별 켜기/끄기**: 광고 차단 때문에 깨지는 사이트만 예외 처리
-- **사용자 필터**: AdGuard/uBlock 문법 일부 지원
+- **사용자 필터**: 널리 쓰이는 필터 규칙 문법(`||도메인^`, `##선택자`) 일부 지원
   ```
   ||ads.example.com^          도메인 차단
   @@||example.com^            해당 사이트 차단 해제
