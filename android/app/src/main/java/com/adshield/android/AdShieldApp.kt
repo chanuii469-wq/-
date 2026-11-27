@@ -13,6 +13,7 @@ class AdShieldApp : Application() {
         super.onCreate()
         Prefs.init(this)
         Stats.load()
+        AppRules.load()
         FilterManager.init(this)
         appScope.launch { FilterManager.rebuild() }
         if (FilterManager.needsInitialDownload()) FilterUpdateWorker.runOnce(this)

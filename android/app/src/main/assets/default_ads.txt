@@ -1,4 +1,4 @@
-! AdShield 내장 기본 차단 목록
+! AdShield 기본 광고 목록
 doubleclick.net
 googlesyndication.com
 googleadservices.com
@@ -57,35 +57,6 @@ ad.daum.net
 display.ad.daum.net
 adcr.naver.com
 siape.veta.naver.com
-google-analytics.com
-googletagmanager.com
-scorecardresearch.com
-quantserve.com
-hotjar.com
-mixpanel.com
-segment.io
-fullstory.com
-crazyegg.com
-mouseflow.com
-chartbeat.com
-newrelic.com
-nr-data.net
-bluekai.com
-krxd.net
-demdex.net
-omtrdc.net
-everesttech.net
-agkn.com
-rlcdn.com
-tapad.com
-exelator.com
-mathtag.com
-addthis.com
-analytics.twitter.com
-ads-twitter.com
-bat.bing.com
-clarity.ms
-wcs.naver.net
 ! 모바일 앱 광고 SDK
 admob.com
 googleads.g.doubleclick.net
@@ -126,11 +97,3 @@ adlibr.com
 admixer.co.kr
 igaworks.com
 adbrix.io
-! 모바일 추적/분석
-app-measurement.com
-appsflyer.com
-adjust.com
-kochava.com
-singular.net
-flurry.com
-amplitude.com

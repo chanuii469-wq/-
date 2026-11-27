@@ -3,6 +3,8 @@ package com.adshield.android
 import com.adshield.android.dns.DnsPackets
 import com.adshield.android.dns.IpPackets
 import com.adshield.android.filter.Blocklist
+import com.adshield.android.filter.UserRule
+import com.adshield.android.filter.UserRules
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,7 +16,7 @@ import org.junit.Test
 class FilterAndDnsTest {
 
     private fun list(vararg lines: String): Blocklist {
-        val b = HashSet<String>(); val a = HashSet<String>()
+        val b = HashMap<String, Int>(); val a = HashSet<String>()
         lines.forEach { Blocklist.parseLine(it, b, a) }
         return Blocklist(b, a)
     }
@@ -95,5 +97,35 @@ class FilterAndDnsTest {
         for (i in 0 until 20 step 2) sum += ((pkt[i].toInt() and 0xFF) shl 8) or (pkt[i + 1].toInt() and 0xFF)
         while (sum shr 16 != 0) sum = (sum and 0xFFFF) + (sum shr 16)
         assertEquals(0xFFFF, sum)
+    }
+
+    @Test fun categoriesCombine() {
+        val b = HashMap<String, Int>(); val a = HashSet<String>()
+        Blocklist.parseLine("ads.com", b, a, Blocklist.ADS)
+        Blocklist.parseLine("t.ads.com", b, a, Blocklist.TRACKERS)
+        Blocklist.parseLine("tracker.io", b, a, Blocklist.TRACKERS)
+        val bl = Blocklist(b, a)
+        assertEquals(Blocklist.ADS, bl.match("x.ads.com"))
+        assertEquals(Blocklist.ADS or Blocklist.TRACKERS, bl.match("t.ads.com"))
+        assertEquals(Blocklist.TRACKERS, bl.match("tracker.io"))
+        assertEquals(0, bl.match("example.org"))
+    }
+
+    @Test fun userRulesToggleRoundTrip() {
+        val text = "||ads.com^\n!- @@||ok.com^\n! plain comment\n\n"
+        val rules = UserRules.parse(text)
+        assertEquals(listOf(UserRule("||ads.com^", true), UserRule("@@||ok.com^", false)), rules)
+        assertEquals(listOf("||ads.com^"), UserRules.activeLines(text))
+        val toggled = rules.map { it.copy(enabled = !it.enabled) }
+        assertEquals("!- ||ads.com^\n@@||ok.com^\n", UserRules.format(toggled))
+        assertEquals("ok.com", toggled[1].domain)
+        assertTrue(toggled[1].allow)
+    }
+
+    @Test fun normalizeInput() {
+        assertEquals("||ads.com^", UserRules.normalize("https://Ads.com/path", false))
+        assertEquals("@@||ok.com^", UserRules.normalize("ok.com", true))
+        assertEquals("@@||ok.com^", UserRules.normalize("@@||ok.com^", false))
+        assertNull(UserRules.normalize("not a domain", false))
     }
 }

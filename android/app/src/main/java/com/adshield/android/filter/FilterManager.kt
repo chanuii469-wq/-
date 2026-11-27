@@ -19,21 +19,27 @@ import java.net.URL
 data class FilterSub(
     val id: String,
     val name: String,
-    val url: String?,          // null = 앱에 내장된 목록
+    val url: String?,          // null 또는 asset:파일명 = 앱에 내장된 목록
     val description: String = "",
+    val category: Int = Blocklist.ADS,
     val enabled: Boolean = true,
     val custom: Boolean = false,
     val lastUpdated: Long = 0,
     val ruleCount: Int = 0,
-)
+) {
+    val remote: Boolean get() = url != null && !url.startsWith("asset:")
+}
 
 object FilterManager {
     private const val TAG = "FilterManager"
-    private const val BUILTIN_ID = "builtin"
     private const val MAX_BYTES = 40L * 1024 * 1024
 
     private val DEFAULTS = listOf(
-        FilterSub(BUILTIN_ID, "AdShield 기본 목록", null, "앱 광고 SDK·국내외 광고 네트워크 (내장)", enabled = true),
+        FilterSub("builtin_ads", "AdShield 기본 광고 목록", "asset:default_ads.txt", "앱 광고 SDK·국내외 광고 네트워크 (내장)"),
+        FilterSub(
+            "builtin_trackers", "AdShield 기본 추적기 목록", "asset:default_trackers.txt",
+            "분석·추적 도구 (내장)", category = Blocklist.TRACKERS,
+        ),
         FilterSub(
             "adguard_dns", "AdGuard DNS 필터",
             "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
@@ -76,7 +82,7 @@ object FilterManager {
     private fun dir() = File(appCtx.filesDir, "filters").apply { mkdirs() }
     private fun fileFor(s: FilterSub) = File(dir(), "${s.id}.txt")
 
-    fun needsInitialDownload() = _subs.value.any { it.enabled && it.url != null && !fileFor(it).exists() }
+    fun needsInitialDownload() = _subs.value.any { it.enabled && it.remote && !fileFor(it).exists() }
 
     // ---------- 구독 목록 저장/불러오기 ----------
     private fun loadSubs(): List<FilterSub> {
@@ -93,8 +99,10 @@ object FilterManager {
                     custom = it.optBoolean("custom", false),
                     lastUpdated = it.optLong("lastUpdated"),
                     ruleCount = it.optInt("ruleCount"),
+                    category = it.optInt("category", Blocklist.ADS),
                 )
-            }
+            }.filter { it.custom || DEFAULTS.any { d -> d.id == it.id } } // 없어진 기본 목록 제거
+                .map { s -> DEFAULTS.firstOrNull { it.id == s.id }?.let { d -> s.copy(url = d.url, category = d.category) } ?: s }
             // 새 버전에서 추가된 기본 목록 합치기
             saved + DEFAULTS.filter { d -> saved.none { it.id == d.id } }
         }.getOrDefault(DEFAULTS)
@@ -107,6 +115,7 @@ object FilterManager {
                 .put("id", it.id).put("name", it.name).put("url", it.url ?: "")
                 .put("description", it.description).put("enabled", it.enabled)
                 .put("custom", it.custom).put("lastUpdated", it.lastUpdated).put("ruleCount", it.ruleCount)
+                .put("category", it.category)
         }).toString()
     }
 
@@ -118,14 +127,14 @@ object FilterManager {
         update(id) { it.copy(enabled = enabled) }
         val sub = _subs.value.first { it.id == id }
         busy {
-            if (enabled && sub.url != null && !fileFor(sub).exists()) download(sub)
+            if (enabled && sub.remote && !fileFor(sub).exists()) download(sub)
             rebuild()
         }
     }
 
-    suspend fun addCustom(name: String, url: String) {
+    suspend fun addCustom(name: String, url: String, category: Int = Blocklist.ADS) {
         val id = "custom_" + System.currentTimeMillis()
-        saveSubs(_subs.value + FilterSub(id, name.ifBlank { url }, url, "사용자 추가 목록", custom = true))
+        saveSubs(_subs.value + FilterSub(id, name.ifBlank { url }, url, "사용자 추가 목록", category = category, custom = true))
         busy {
             download(_subs.value.first { it.id == id })
             rebuild()
@@ -143,19 +152,21 @@ object FilterManager {
         rebuild()
     }
 
-    /** 로그 화면에서 도메인 차단/허용 */
+    /** 도메인 차단/허용 규칙 추가. 같은 도메인의 기존 규칙은 대체한다. */
     suspend fun addUserRule(domain: String, allow: Boolean) {
-        val other = if (allow) "||$domain^" else "@@||$domain^"
-        val rule = if (allow) "@@||$domain^" else "||$domain^"
-        val lines = Prefs.userRules.lines().filter { it.isNotBlank() && it.trim() != other && it.trim() != rule }
-        setUserRules((lines + rule).joinToString("\n") + "\n")
+        val rule = UserRules.normalize(domain, allow) ?: return
+        val d = Blocklist.parseRule(rule)!!.first
+        val rules = UserRules.parse(Prefs.userRules).filterNot { it.domain == d }
+        setUserRules(UserRules.format(rules + UserRule(rule, true)))
     }
+
+    suspend fun setUserRuleList(rules: List<UserRule>) = setUserRules(UserRules.format(rules))
 
     /** 켜진 원격 목록 모두 다운로드. @return 실패한 목록 이름 */
     suspend fun updateAll(): List<String> {
         val failed = mutableListOf<String>()
         busy {
-            for (s in _subs.value.filter { it.enabled && it.url != null }) {
+            for (s in _subs.value.filter { it.enabled && it.remote }) {
                 if (!download(s)) failed += s.name
             }
             rebuild()
@@ -209,7 +220,7 @@ object FilterManager {
             }
             conn.disconnect()
             // 규칙 수 계산
-            val b = HashSet<String>(); val a = HashSet<String>()
+            val b = HashMap<String, Int>(); val a = HashSet<String>()
             tmp.useLines { seq -> seq.forEach { Blocklist.parseLine(it, b, a) } }
             if (b.isEmpty() && a.isEmpty()) throw IllegalStateException("no rules")
             tmp.renameTo(fileFor(s))
@@ -224,25 +235,25 @@ object FilterManager {
     /** 켜진 모든 목록 + 사용자 규칙으로 차단 목록을 다시 만듦 */
     suspend fun rebuild() = mutex.withLock {
         withContext(Dispatchers.IO) {
-            val block = HashSet<String>(200_000)
+            val block = HashMap<String, Int>(200_000)
             val allow = HashSet<String>()
             for (s in _subs.value.filter { it.enabled }) {
                 try {
-                    if (s.url == null) {
-                        val before = block.size
-                        appCtx.assets.open("default_blocklist.txt").bufferedReader().useLines { seq ->
-                            seq.forEach { Blocklist.parseLine(it, block, allow) }
+                    if (s.url?.startsWith("asset:") == true) {
+                        var n = 0
+                        appCtx.assets.open(s.url.removePrefix("asset:")).bufferedReader().useLines { seq ->
+                            seq.forEach { n += Blocklist.parseLine(it, block, allow, s.category) }
                         }
-                        if (s.ruleCount == 0) update(s.id) { it.copy(ruleCount = block.size - before) }
+                        if (s.ruleCount == 0) update(s.id) { it.copy(ruleCount = n) }
                     } else {
                         val f = fileFor(s)
-                        if (f.exists()) f.useLines { seq -> seq.forEach { Blocklist.parseLine(it, block, allow) } }
+                        if (f.exists()) f.useLines { seq -> seq.forEach { Blocklist.parseLine(it, block, allow, s.category) } }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "load failed: ${s.id}", e)
                 }
             }
-            Prefs.userRules.lines().forEach { Blocklist.parseLine(it, block, allow) }
+            UserRules.activeLines(Prefs.userRules).forEach { Blocklist.parseLine(it, block, allow, Blocklist.USER) }
             Stats.blocklist = Blocklist(block, allow)
             _ruleCount.value = block.size
         }

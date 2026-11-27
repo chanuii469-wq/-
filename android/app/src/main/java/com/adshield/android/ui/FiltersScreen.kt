@@ -42,7 +42,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adshield.android.Prefs
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.FilterChip
+import androidx.compose.runtime.mutableIntStateOf
+import com.adshield.android.filter.Blocklist
 import com.adshield.android.filter.FilterManager
+import com.adshield.android.filter.UserRules
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -56,7 +64,13 @@ fun FiltersScreen(modifier: Modifier) {
     val busy by FilterManager.busy.collectAsStateWithLifecycle()
     val rules by FilterManager.ruleCount.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
-    var editingRules by remember { mutableStateOf(false) }
+    var showRules by remember { mutableStateOf(false) }
+    val prefsVersion by Prefs.version.collectAsStateWithLifecycle()
+
+    if (showRules) {
+        RulesScreen(modifier, onBack = { showRules = false })
+        return
+    }
     val fmt = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
 
     Column(modifier.fillMaxSize()) {
@@ -92,11 +106,14 @@ fun FiltersScreen(modifier: Modifier) {
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(s.name, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(s.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+                                CategoryBadge(s.category)
+                            }
                             if (s.description.isNotEmpty()) Text(s.description, style = MaterialTheme.typography.bodySmall)
                             val info = buildList {
                                 if (s.ruleCount > 0) add("규칙 %,d개".format(s.ruleCount))
-                                if (s.url != null) add(if (s.lastUpdated > 0) "업데이트 ${fmt.format(Date(s.lastUpdated))}" else "아직 다운로드 안 됨")
+                                if (s.remote) add(if (s.lastUpdated > 0) "업데이트 ${fmt.format(Date(s.lastUpdated))}" else "아직 다운로드 안 됨")
                             }.joinToString(" · ")
                             if (info.isNotEmpty()) Text(
                                 info, style = MaterialTheme.typography.bodySmall,
@@ -113,14 +130,17 @@ fun FiltersScreen(modifier: Modifier) {
                 }
             }
             item {
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().clickable { showRules = true }) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("사용자 규칙", fontWeight = FontWeight.Bold)
-                            val n = Prefs.userRules.lines().count { it.isNotBlank() && !it.trim().startsWith("!") }
-                            Text("직접 추가한 차단/허용 규칙 ${n}개", style = MaterialTheme.typography.bodySmall)
+                            val rulesList = remember(prefsVersion) { UserRules.parse(Prefs.userRules) }
+                            Text(
+                                "도메인별 차단/허용 ${rulesList.size}개 · 적용 중 ${rulesList.count { it.enabled }}개",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
-                        IconButton(onClick = { editingRules = true }) { Icon(Icons.Filled.Edit, "편집") }
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
                     }
                 }
             }
@@ -130,6 +150,7 @@ fun FiltersScreen(modifier: Modifier) {
     if (adding) {
         var name by remember { mutableStateOf("") }
         var url by remember { mutableStateOf("https://") }
+        var category by remember { mutableIntStateOf(Blocklist.ADS) }
         AlertDialog(
             onDismissRequest = { adding = false },
             title = { Text("필터 목록 추가") },
@@ -138,43 +159,38 @@ fun FiltersScreen(modifier: Modifier) {
                     Text("hosts 형식이나 AdGuard/uBlock 형식(||domain^) 목록 주소를 입력하세요.", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(name, { name = it }, label = { Text("이름") }, singleLine = true)
                     OutlinedTextField(url, { url = it }, label = { Text("URL") }, singleLine = true)
+                    Text("분류 (앱별 설정에서 따로 켜고 끌 수 있어요)", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(category == Blocklist.ADS, { category = Blocklist.ADS }, label = { Text("광고") })
+                        FilterChip(category == Blocklist.TRACKERS, { category = Blocklist.TRACKERS }, label = { Text("추적기") })
+                    }
                 }
             },
             confirmButton = {
                 TextButton(enabled = url.startsWith("http") && url.length > 10, onClick = {
                     adding = false
-                    scope.launch { FilterManager.addCustom(name.trim(), url.trim()) }
+                    scope.launch { FilterManager.addCustom(name.trim(), url.trim(), category) }
                 }) { Text("추가") }
             },
             dismissButton = { TextButton(onClick = { adding = false }) { Text("취소") } },
         )
     }
+}
 
-    if (editingRules) {
-        var text by remember { mutableStateOf(Prefs.userRules) }
-        AlertDialog(
-            onDismissRequest = { editingRules = false },
-            title = { Text("사용자 규칙") },
-            text = {
-                Column {
-                    Text(
-                        "한 줄에 하나씩:\n||ads.example.com^  차단\n@@||example.com^  허용(예외)\n! 주석",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    OutlinedTextField(
-                        text, { text = it },
-                        Modifier.fillMaxWidth().height(260.dp).padding(top = 8.dp),
-                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    editingRules = false
-                    scope.launch { FilterManager.setUserRules(text) }
-                }) { Text("저장") }
-            },
-            dismissButton = { TextButton(onClick = { editingRules = false }) { Text("취소") } },
-        )
+@Composable
+fun CategoryBadge(category: Int) {
+    val (text, color) = when (category) {
+        Blocklist.TRACKERS -> "추적기" to MaterialTheme.colorScheme.tertiary
+        Blocklist.USER -> "사용자" to MaterialTheme.colorScheme.secondary
+        else -> "광고" to MaterialTheme.colorScheme.primary
     }
+    Text(
+        text,
+        color = color,
+        style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .border(1.dp, color, RoundedCornerShape(50))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }

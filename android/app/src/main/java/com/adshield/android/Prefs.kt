@@ -62,6 +62,10 @@ object Prefs {
         get() = sp.getString("user_rules", "")!!
         set(v) = sp.edit().putString("user_rules", v).apply()
 
+    var appRulesJson: String?
+        get() = sp.getString("app_rules", null)
+        set(v) = sp.edit().putString("app_rules", v).apply()
+
     var subscriptionsJson: String?
         get() = sp.getString("subscriptions", null)
         set(v) = sp.edit().putString("subscriptions", v).apply()

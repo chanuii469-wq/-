@@ -10,6 +10,7 @@ data class LogEntry(
     val qtype: Int,
     val blocked: Boolean,
     val app: String?,
+    val pkg: String? = null,
 )
 
 /** 서비스와 UI가 공유하는 실행 상태/통계 */
@@ -37,6 +38,12 @@ object Stats {
     val topDomains: StateFlow<List<Pair<String, Int>>> = _topDomains
     val topApps: StateFlow<List<Pair<String, Int>>> = _topApps
 
+    private val pkgCounts = HashMap<String, LongArray>()
+
+    /** 앱별 (전체 요청, 차단) 수 — 이번 실행 기준 */
+    @Synchronized
+    fun countsFor(pkg: String): Pair<Long, Long> = pkgCounts[pkg]?.let { it[0] to it[1] } ?: (0L to 0L)
+
     private var unsaved = 0
 
     fun load() {
@@ -45,7 +52,7 @@ object Stats {
     }
 
     @Synchronized
-    fun record(domain: String, qtype: Int, blocked: Boolean, app: String?) {
+    fun record(domain: String, qtype: Int, blocked: Boolean, app: String?, pkg: String? = null, log: Boolean = true) {
         _totalQueries.value++
         if (blocked) {
             _totalBlocked.value++
@@ -54,8 +61,13 @@ object Stats {
             _topDomains.value = domainCounts.entries.sortedByDescending { it.value }.take(10).map { it.key to it.value }
             _topApps.value = appCounts.entries.sortedByDescending { it.value }.take(10).map { it.key to it.value }
         }
-        if (Prefs.logQueries) {
-            logBuf.addFirst(LogEntry(System.currentTimeMillis(), domain, qtype, blocked, app))
+        if (pkg != null) {
+            val c = pkgCounts.getOrPut(pkg) { LongArray(2) }
+            c[0]++
+            if (blocked) c[1]++
+        }
+        if (Prefs.logQueries && log) {
+            logBuf.addFirst(LogEntry(System.currentTimeMillis(), domain, qtype, blocked, app, pkg))
             while (logBuf.size > LOG_SIZE) logBuf.removeLast()
             _log.value = logBuf.toList()
         }
@@ -73,7 +85,7 @@ object Stats {
     fun reset() {
         _totalQueries.value = 0
         _totalBlocked.value = 0
-        domainCounts.clear(); appCounts.clear()
+        domainCounts.clear(); appCounts.clear(); pkgCounts.clear()
         _topDomains.value = emptyList(); _topApps.value = emptyList()
         logBuf.clear(); _log.value = emptyList()
         save()

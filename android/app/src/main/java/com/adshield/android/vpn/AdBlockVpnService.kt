@@ -17,12 +17,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.adshield.android.AppRule
+import com.adshield.android.AppRules
 import com.adshield.android.Prefs
 import com.adshield.android.R
 import com.adshield.android.Stats
 import com.adshield.android.dns.DnsPackets
 import com.adshield.android.dns.IpPackets
 import com.adshield.android.dns.UdpPacket
+import com.adshield.android.filter.Blocklist
 import com.adshield.android.ui.MainActivity
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -63,7 +66,8 @@ class AdBlockVpnService : VpnService() {
     private var out: FileOutputStream? = null
     private lateinit var pool: ExecutorService
     private lateinit var upstream: Upstream
-    private val appNames = ConcurrentHashMap<Int, String>()
+    private class Owner(val pkg: String?, val label: String)
+    private val owners = ConcurrentHashMap<Int, Owner>()
     private var lastNotify = 0L
 
     override fun onCreate() {
@@ -172,8 +176,12 @@ class AdBlockVpnService : VpnService() {
 
     private fun handleDns(pkt: UdpPacket) {
         val query = DnsPackets.parse(pkt.payload) ?: return
-        val blocked = Stats.blocklist.isBlocked(query.name)
-        val app = if (Prefs.logQueries || blocked) ownerApp(pkt) else null
+        val mask = Stats.blocklist.match(query.name)
+        // 차단 후보이거나 기록이 켜져 있을 때만 요청한 앱을 조회 (binder 호출 비용 절약)
+        val owner = if (mask != 0 || Prefs.logQueries) ownerApp(pkt) else null
+        val rule = owner?.pkg?.let { AppRules[it] } ?: AppRule()
+        val blocked = (mask and (Blocklist.ADS or Blocklist.USER) != 0 && rule.ads) ||
+            (mask and Blocklist.TRACKERS != 0 && rule.trackers)
 
         val response = if (blocked) {
             DnsPackets.blockedResponse(pkt.payload, query, Prefs.nxdomain)
@@ -181,7 +189,7 @@ class AdBlockVpnService : VpnService() {
             upstream.resolve(pkt.payload) ?: return
         }
         write(IpPackets.buildUdp(pkt.dstIp, pkt.srcIp, pkt.dstPort, pkt.srcPort, response))
-        Stats.record(query.name, query.qtype, blocked, app)
+        Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, rule.log)
         if (blocked) updateNotification()
     }
 
@@ -194,7 +202,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     /** 어떤 앱이 요청했는지 (Android 10 이상) */
-    private fun ownerApp(pkt: UdpPacket): String? {
+    private fun ownerApp(pkt: UdpPacket): Owner? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         return try {
             val cm = getSystemService(ConnectivityManager::class.java)
@@ -203,20 +211,21 @@ class AdBlockVpnService : VpnService() {
                 InetSocketAddress(InetAddress.getByAddress(pkt.srcIp), pkt.srcPort),
                 InetSocketAddress(InetAddress.getByAddress(pkt.dstIp), pkt.dstPort),
             )
-            if (uid < 0) null else appNames.getOrPut(uid) { labelFor(uid) }
+            if (uid < 0) null else owners.getOrPut(uid) { ownerFor(uid) }
         } catch (e: Exception) {
             null
         }
     }
 
-    private fun labelFor(uid: Int): String {
+    private fun ownerFor(uid: Int): Owner {
         val pkgs = packageManager.getPackagesForUid(uid)
-        if (pkgs.isNullOrEmpty()) return if (uid == 1000) "Android 시스템" else "UID $uid"
-        return try {
+        if (pkgs.isNullOrEmpty()) return Owner(null, if (uid == 1000) "Android 시스템" else "UID $uid")
+        val label = try {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkgs[0], 0)).toString()
         } catch (e: Exception) {
             pkgs[0]
         }
+        return Owner(pkgs[0], label)
     }
 
     // ---------------- 알림 ----------------
