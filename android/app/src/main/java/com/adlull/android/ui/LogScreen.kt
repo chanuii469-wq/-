@@ -59,9 +59,11 @@ fun LogScreen(modifier: Modifier) {
     var selected by remember { mutableStateOf<LogEntry?>(null) }
     val fmt = remember { SimpleDateFormat("HH:mm:ss", Locale.KOREA) }
 
-    val shown = log.filter {
-        (mode == 0 || (mode == 1) == it.blocked) &&
-            (query.isBlank() || it.domain.contains(query, true) || it.app?.contains(query, true) == true)
+    val shown = remember(log, query, mode) {
+        log.filter {
+            (mode == 0 || (mode == 1) == it.blocked) &&
+                (query.isBlank() || it.domain.contains(query, true) || it.app?.contains(query, true) == true)
+        }
     }
 
     Column(modifier.fillMaxSize()) {

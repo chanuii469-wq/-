@@ -65,13 +65,20 @@ fun SettingsScreen(modifier: Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = Prefs.upstream == u, onClick = { Prefs.upstream = u })
-                Text(u.label)
+                Column {
+                    Text(u.label)
+                    if (u == UpstreamDns.AUTO) Text(
+                        "통신사·와이파이 DNS와 Cloudflare에 동시에 물어 먼저 온 답을 써요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         SwitchRow(
             "암호화 DNS (DNS-over-HTTPS)",
             "통신사·공유기가 방문 기록을 볼 수 없게 DNS를 암호화해요. 켜면 페이지 로딩이 조금 느려질 수 있어요",
-            Prefs.useDoh, enabled = Prefs.upstream != UpstreamDns.SYSTEM,
+            Prefs.useDoh, enabled = Prefs.upstream.supportsDoh,
         ) { Prefs.useDoh = it }
 
         HorizontalDivider()

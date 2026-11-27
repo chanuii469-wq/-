@@ -44,6 +44,7 @@ class DnsEngineTest {
         val delayMs: Long = 0,
         val silent: Boolean = false,
         val wrongQuestion: Boolean = false,
+        val nxdomain: Boolean = false,
     ) : AutoCloseable {
         val sock = DatagramSocket(0, InetAddress.getLoopbackAddress())
         val received = AtomicInteger()
@@ -57,7 +58,8 @@ class DnsEngineTest {
                         sock.receive(p)
                         received.incrementAndGet()
                         if (silent) continue
-                        val resp = answerFor(buf.copyOf(p.length), if (wrongQuestion) "evil.example" else null)
+                        val q = buf.copyOf(p.length)
+                        val resp = if (nxdomain) nxdomainFor(q) else answerFor(q, if (wrongQuestion) "evil.example" else null)
                         val to = p.socketAddress
                         if (delayMs <= 0) sock.send(DatagramPacket(resp, resp.size, to))
                         else sched.schedule({ runCatching { sock.send(DatagramPacket(resp, resp.size, to)) } }, delayMs, TimeUnit.MILLISECONDS)
@@ -75,6 +77,7 @@ class DnsEngineTest {
         val blocked: Set<String> = emptySet(),
         val appRules: Boolean = false,
         val lookupDelayMs: Long = 2,
+        val race: List<InetSocketAddress> = emptyList(),
     ) : DnsEngine.Host {
         val out = LinkedBlockingQueue<ByteArray>()
         val ownerCalls = AtomicInteger()
@@ -92,13 +95,14 @@ class DnsEngineTest {
         }
         override fun record(name: String, qtype: Int, blocked: Boolean, owner: AppOwner?) {}
         override fun servers() = upstreams
+        override fun raceServers() = race
         override fun cacheScope() = "test"
         override fun dohUrl(): String? = null
         override fun onFailure() { failures.incrementAndGet() }
     }
 
-    private fun fakeDns(delayMs: Long = 0, silent: Boolean = false, wrongQuestion: Boolean = false) =
-        FakeDns(delayMs, silent, wrongQuestion).also { closeables.add(it) }
+    private fun fakeDns(delayMs: Long = 0, silent: Boolean = false, wrongQuestion: Boolean = false, nxdomain: Boolean = false) =
+        FakeDns(delayMs, silent, wrongQuestion, nxdomain).also { closeables.add(it) }
 
     private fun engine(host: FakeHost, deadlineMs: Long = 3000) =
         DnsEngine(host, deadlineMs = deadlineMs).also { it.start(); engines.add(it) }
@@ -261,6 +265,59 @@ class DnsEngineTest {
         assertTrue("cached ${cachedMs}ms", cachedMs < 50)
     }
 
+    // ---------------------------------------------------------------- 자동 모드(경쟁)
+
+    @Test fun raceUsesFasterPublicServer() {
+        val slowPrimary = fakeDns(delayMs = 300)
+        val fastPublic = fakeDns()
+        val h = FakeHost(listOf(slowPrimary.address), race = listOf(fastPublic.address))
+        val e = engine(h)
+        val t0 = System.nanoTime()
+        send(e, 1, "race.example", 50000)
+        val r = take(h)!!
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        assertEquals(0, rcodeOf(r.payload))
+        assertEquals(1, fastPublic.received.get()) // 처음부터 동시에 보냄
+        assertEquals(1, slowPrimary.received.get())
+        assertTrue("race took ${ms}ms", ms < 150)
+    }
+
+    @Test fun publicNxdomainWaitsForPrimaryAnswer() {
+        val primary = fakeDns(delayMs = 100) // 공유기 DNS만 아는 내부 이름이라고 가정
+        val public = fakeDns(nxdomain = true)
+        val h = FakeHost(listOf(primary.address), race = listOf(public.address))
+        val e = engine(h)
+        send(e, 2, "router.local.example", 50001)
+        val r = take(h)!!
+        assertEquals(0, rcodeOf(r.payload)) // 공용 DNS의 '없음'보다 기본 DNS의 답을 씀
+    }
+
+    @Test fun publicNxdomainIsUsedWhenPrimaryNeverAnswers() {
+        val primary = fakeDns(silent = true)
+        val public = fakeDns(nxdomain = true)
+        val h = FakeHost(listOf(primary.address), race = listOf(public.address))
+        val e = engine(h)
+        val t0 = System.nanoTime()
+        send(e, 3, "nothing.example", 50002)
+        val r = take(h, 3000)!!
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        assertEquals(3, rcodeOf(r.payload)) // NXDOMAIN
+        assertTrue("held ${ms}ms", ms in 300..1000)
+    }
+
+    @Test fun cacheSurvivesSaveAndLoad() {
+        val c1 = com.adlull.android.dns.DnsCache()
+        val q = query(1, "saved.example")
+        val parsed = DnsPackets.parse(q)!!
+        c1.put(parsed, answerFor(q), "s")
+        val bytes = java.io.ByteArrayOutputStream().also { c1.save(java.io.DataOutputStream(it)) }.toByteArray()
+        val c2 = com.adlull.android.dns.DnsCache()
+        assertEquals(1, c2.load(java.io.DataInputStream(java.io.ByteArrayInputStream(bytes))))
+        val hit = c2.get(query(7, "saved.example"), parsed, "s")
+        assertNotNull(hit)
+        assertEquals(7, idOf(hit!!))
+    }
+
     // ---------------------------------------------------------------- 부하
 
     /** 2만 개 서로 다른 도메인을 업스트림 10ms 지연으로 처리할 때의 CPU·스레드 */
@@ -310,6 +367,14 @@ class DnsEngineTest {
             out.write(0)
             out.write(byteArrayOf((type shr 8).toByte(), type.toByte(), 0, 1))
             return out.toByteArray()
+        }
+
+        fun nxdomainFor(q: ByteArray): ByteArray {
+            val parsed = DnsPackets.question(q)!!
+            val r = q.copyOf(parsed.questionEnd)
+            r[2] = 0x81.toByte(); r[3] = 0x83.toByte() // NXDOMAIN
+            for (i in 6 until 12) r[i] = 0
+            return r
         }
 
         /** 질의에 A 레코드(TTL 300) 하나로 답함. overrideName이면 다른 질문으로 답함(위조 흉내) */

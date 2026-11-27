@@ -56,7 +56,44 @@ class DnsCache(private val maxEntries: Int = 8192) {
     @Synchronized
     fun clear() = map.clear()
 
+    @Synchronized
+    fun size() = map.size
+
+    /** 기기에 저장 (앱이 다시 시작돼도 캐시를 이어 쓰도록). 오래된 순서를 유지함 */
+    @Synchronized
+    fun save(out: java.io.DataOutputStream, now: Long = System.currentTimeMillis()) {
+        val live = map.entries.filter { now - it.value.expiresAt <= STALE_MS }
+        out.writeInt(FILE_VERSION)
+        out.writeInt(live.size)
+        for ((k, e) in live) {
+            out.writeUTF(k)
+            out.writeLong(e.expiresAt)
+            out.writeLong(e.ttlMs)
+            out.writeShort(e.response.size)
+            out.write(e.response)
+        }
+    }
+
+    /** 저장된 캐시를 불러옴. @return 불러온 항목 수 */
+    @Synchronized
+    fun load(input: java.io.DataInputStream, now: Long = System.currentTimeMillis()): Int {
+        if (input.readInt() != FILE_VERSION) return 0
+        var loaded = 0
+        repeat(input.readInt().coerceIn(0, maxEntries)) {
+            val k = input.readUTF()
+            val expiresAt = input.readLong()
+            val ttlMs = input.readLong()
+            val resp = ByteArray(input.readUnsignedShort()).also { input.readFully(it) }
+            if (now - expiresAt <= STALE_MS && !map.containsKey(k)) {
+                map[k] = Entry(resp, expiresAt, ttlMs)
+                loaded++
+            }
+        }
+        return loaded
+    }
+
     companion object {
+        private const val FILE_VERSION = 1
         private const val MAX_TTL = 3600L
         private const val STALE_MS = 3600 * 1000L // 만료 후 1시간까지만 (오래된 CDN 주소 방지)
         private const val STALE_TTL = 10L

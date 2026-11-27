@@ -107,6 +107,15 @@ object Stats {
         }
     }
 
+    private const val MAX_COUNTED = 5000
+
+    /** 오래 켜 두어도 메모리가 늘지 않도록 많이 차단된 1,000개만 남김 */
+    private fun trim(m: HashMap<String, Int>) {
+        val keep = m.entries.sortedByDescending { it.value }.take(1000).associate { it.key to it.value }
+        m.clear()
+        m.putAll(keep)
+    }
+
     private fun top(m: Map<String, Int>) = m.entries.sortedByDescending { it.value }.take(10).map { it.key to it.value }
 
     @Synchronized
@@ -115,6 +124,7 @@ object Stats {
         if (isBlocked) {
             blocked++
             domainCounts.merge(domain, 1, Int::plus)
+            if (domainCounts.size > MAX_COUNTED) trim(domainCounts)
             if (app != null) appCounts.merge(app, 1, Int::plus)
             topDirty = true
         }

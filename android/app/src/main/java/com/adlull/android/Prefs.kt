@@ -6,13 +6,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 enum class UpstreamDns(val label: String, val ips: List<String>, val dohUrl: String?) {
-    SYSTEM("통신사·와이파이 기본 DNS (가장 빠름)", emptyList(), null),
+    AUTO("자동 · 가장 빠른 응답 (추천)", emptyList(), null),
+    SYSTEM("통신사·와이파이 기본 DNS만", emptyList(), null),
     CLOUDFLARE("Cloudflare (1.1.1.1)", listOf("1.1.1.1", "1.0.0.1", "2606:4700:4700::1111"), "https://1.1.1.1/dns-query"),
     GOOGLE("Google (8.8.8.8)", listOf("8.8.8.8", "8.8.4.4", "2001:4860:4860::8888"), "https://8.8.8.8/dns-query"),
     QUAD9("Quad9 (9.9.9.9)", listOf("9.9.9.9", "149.112.112.112", "2620:fe::fe"), "https://9.9.9.9/dns-query");
 
     /** IP 문자열을 미리 InetAddress로 변환해 둠 (요청마다 변환하지 않도록) */
     val addresses: List<java.net.InetAddress> by lazy { ips.map { java.net.InetAddress.getByName(it) } }
+
+    /** DoH를 쓸 수 있는 서버인지 (특정 회사 서버만 가능) */
+    val supportsDoh get() = dohUrl != null
 }
 
 /** 앱 설정. UI가 관찰할 수 있도록 변경 시 version을 올림 */
@@ -45,7 +49,7 @@ object Prefs {
     class Hot(val upstream: UpstreamDns, val useDoh: Boolean, val nxdomain: Boolean, val logQueries: Boolean)
 
     @Volatile
-    var hot = Hot(UpstreamDns.SYSTEM, false, false, true)
+    var hot = Hot(UpstreamDns.AUTO, false, false, true)
         private set
 
     private fun refreshHot() {
@@ -53,7 +57,7 @@ object Prefs {
     }
 
     var upstream: UpstreamDns
-        get() = runCatching { UpstreamDns.valueOf(sp.getString("upstream", "SYSTEM")!!) }.getOrDefault(UpstreamDns.SYSTEM)
+        get() = runCatching { UpstreamDns.valueOf(sp.getString("upstream", "AUTO")!!) }.getOrDefault(UpstreamDns.AUTO)
         set(v) = sp.edit().putString("upstream", v.name).apply()
 
     var useDoh: Boolean

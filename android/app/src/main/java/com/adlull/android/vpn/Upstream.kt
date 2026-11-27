@@ -41,12 +41,12 @@ class Upstream(context: Context, private val onNetworkChanged: () -> Unit = {}) 
     fun scope(): String = Prefs.hot.let { "${it.upstream.name}:${it.useDoh}" }
 
     fun dohUrl(): String? = Prefs.hot.let {
-        if (it.upstream != UpstreamDns.SYSTEM && it.useDoh) it.upstream.dohUrl else null
+        if (it.upstream.supportsDoh && it.useDoh) it.upstream.dohUrl else null
     }
 
     fun servers(): List<InetSocketAddress> {
         val u = Prefs.hot.upstream
-        val list = if (u == UpstreamDns.SYSTEM) systemServers() else synchronized(fixed) {
+        val list = if (u == UpstreamDns.SYSTEM || u == UpstreamDns.AUTO) systemServers() else synchronized(fixed) {
             fixed.getOrPut(u) { u.addresses.map { InetSocketAddress(it, 53) } }
         }
         if (Diagnostics.dnsServers.size != list.size) {
@@ -54,6 +54,12 @@ class Upstream(context: Context, private val onNetworkChanged: () -> Unit = {}) 
         }
         return list
     }
+
+    /** 자동 모드: 기본 DNS와 동시에 물어볼 공용 DNS (Cloudflare) */
+    fun raceServers(): List<InetSocketAddress> =
+        if (Prefs.hot.upstream == UpstreamDns.AUTO) cloudflare else emptyList()
+
+    private val cloudflare by lazy { UpstreamDns.CLOUDFLARE.addresses.map { InetSocketAddress(it, 53) } }
 
     /**
      * 지금 실제로 쓰는 네트워크(와이파이 또는 모바일)의 DNS 서버.

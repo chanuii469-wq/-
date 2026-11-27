@@ -62,6 +62,12 @@ class DnsEngine(
         fun lookupOwner(packet: UdpPacket): AppOwner?
         fun record(name: String, qtype: Int, blocked: Boolean, owner: AppOwner?)
         fun servers(): List<InetSocketAddress>
+        /**
+         * 함께 경쟁시킬 공용 DNS (자동 모드). 비어 있으면 경쟁하지 않음.
+         * 공용 DNS의 '없는 도메인(NXDOMAIN)' 답은 내부 주소(공유기 페이지 등)를 모를 수 있어
+         * 바로 믿지 않고 기본 DNS의 답을 잠깐 기다린다.
+         */
+        fun raceServers(): List<InetSocketAddress> = emptyList()
         fun cacheScope(): String
         /** DoH 주소. 꺼져 있으면 null */
         fun dohUrl(): String?
@@ -81,6 +87,7 @@ class DnsEngine(
         val scope: String,
         val created: Long,
         val servers: List<InetSocketAddress>,
+        val raceSet: Set<InetSocketAddress>,
     ) {
         val waiters = ArrayList<Waiter>(2)
         val sentAt = HashMap<InetSocketAddress, Long>(4)
@@ -90,6 +97,9 @@ class DnsEngine(
         var viaDoh = false
         var tcp = false
         var truncated: ByteArray? = null
+        /** 바로 믿기 어려운 답(SERVFAIL·REFUSED, 공용 DNS의 NXDOMAIN): 더 좋은 답을 잠깐 기다림 */
+        var held: ByteArray? = null
+        var heldUntil = Long.MAX_VALUE
     }
 
     private val lock = Any()
@@ -266,7 +276,9 @@ class DnsEngine(
             }
         }
         // 서버 목록은 시스템 호출이 있을 수 있어 lock 밖에서 가져옴
-        val servers = orderServers(host.servers())
+        val primary = orderServers(host.servers())
+        val race = orderServers(host.raceServers()).filter { it !in primary }
+        val servers = primary + race
         if (servers.isEmpty()) return false
         val p: Pending
         synchronized(lock) {
@@ -280,7 +292,7 @@ class DnsEngine(
             if (byId.size >= MAX_PENDING) return false
             val id = newIdLocked()
             val upstreamQuery = query.copyOf().also { it[0] = (id shr 8).toByte(); it[1] = id.toByte() }
-            p = Pending(id, key, q, upstreamQuery, scope, now, servers)
+            p = Pending(id, key, q, upstreamQuery, scope, now, servers, race.toSet())
             if (w != null) p.waiters.add(w)
             p.deadline = now + deadlineMs
             byId[id] = p
@@ -305,6 +317,9 @@ class DnsEngine(
         synchronized(lock) {
             if (byId[p.id] !== p) return
             sendNextLocked(p, now)
+            // 자동 모드: 기본 DNS와 가장 빠른 공용 DNS에 동시에 물어 먼저 온 답을 씀
+            val firstRace = p.servers.firstOrNull { it in p.raceSet }
+            if (firstRace != null && p.servers[0] !in p.raceSet) sendToLocked(p, firstRace, now)
         }
         wakeIfNeeded(p)
     }
@@ -325,6 +340,15 @@ class DnsEngine(
         val server = p.servers[p.attempts % p.servers.size]
         val round = p.attempts / p.servers.size
         p.attempts++
+        sendToLocked(p, server, now)
+        // 다른 서버로는 빨리 넘어가되, 이미 물어본 서버에 다시 보낼 때는 최소 0.4초 기다림
+        val next = p.servers[p.attempts % p.servers.size]
+        val delay = hedgeDelay(server) * (1 + round)
+        p.nextSendAt = now + if (next in p.sentAt) maxOf(delay, RESEND_SAME_MS) else delay
+    }
+
+    private fun sendToLocked(p: Pending, server: InetSocketAddress, now: Long) {
+        if (channels.isEmpty()) return
         p.sentAt.putIfAbsent(server, now)
         try {
             channels[p.id % channels.size].send(ByteBuffer.wrap(p.query), server)
@@ -332,7 +356,6 @@ class DnsEngine(
         } catch (e: Exception) {
             failures.merge(server, 1, Int::plus)
         }
-        p.nextSendAt = now + hedgeDelay(server) * (1 + round)
     }
 
     /** 서버 응답이 이 시간 안에 안 오면 다음 서버에도 보냄 */
@@ -401,6 +424,17 @@ class DnsEngine(
             if (!sameQuestion(data, p.q)) return
             rttMs.merge(from, (now - sent).toDouble()) { old, v -> old * 0.7 + v * 0.3 }
             failures.remove(from)
+            val rcode = data[3].toInt() and 0x0F
+            val weak = rcode == RCODE_SERVFAIL || rcode == RCODE_REFUSED ||
+                (rcode == RCODE_NXDOMAIN && from in p.raceSet)
+            if (weak && data[2].toInt() and 0x02 == 0) {
+                // 다른 서버의 더 좋은 답을 잠깐 기다림 (그동안 재전송도 계속)
+                if (p.held == null) {
+                    p.held = data
+                    p.heldUntil = minOf(p.deadline, now + HOLD_MS)
+                }
+                return
+            }
             if (data[2].toInt() and 0x02 != 0) { // 잘린 응답 → 같은 서버에 TCP로 다시
                 if (p.tcp) return
                 p.tcp = true
@@ -429,7 +463,7 @@ class DnsEngine(
         var expired: ArrayList<Pending>? = null
         synchronized(lock) {
             for (p in byId.values) {
-                if (now >= p.deadline) {
+                if (now >= p.deadline || (p.held != null && now >= p.heldUntil)) {
                     (expired ?: ArrayList<Pending>().also { expired = it }).add(p)
                 } else if (!p.viaDoh && !p.tcp && now >= p.nextSendAt) {
                     sendNextLocked(p, now)
@@ -437,7 +471,8 @@ class DnsEngine(
             }
             expired?.forEach { removeLocked(it) }
         }
-        expired?.forEach { fail(it) }
+        // 기다려도 더 좋은 답이 없으면 붙잡아 둔 답을, 그마저 없으면 SERVFAIL
+        expired?.forEach { p -> p.held?.let { complete(p, it) } ?: fail(p) }
     }
 
     private fun nextEventLocked(): Long {
@@ -446,8 +481,10 @@ class DnsEngine(
         return t
     }
 
-    private fun eventOf(p: Pending): Long =
-        if (p.viaDoh || p.tcp) p.deadline else minOf(p.nextSendAt, p.deadline)
+    private fun eventOf(p: Pending): Long {
+        val base = if (p.viaDoh || p.tcp) p.deadline else minOf(p.nextSendAt, p.deadline)
+        return if (p.held != null) minOf(base, p.heldUntil) else base
+    }
 
     // ------------------------------------------------------------ 완료·실패
 
@@ -593,7 +630,13 @@ class DnsEngine(
         private const val CHANNELS = 4
         private const val MAX_PENDING = 4096
         private const val MAX_WAITERS = 256
-        private const val DEFAULT_RTT_MS = 120.0
+        /** 아직 응답 시간을 모르는 서버의 추정값 (재전송 대기 = 2.5배 = 0.15초) */
+        private const val DEFAULT_RTT_MS = 60.0
+        private const val HOLD_MS = 400L
+        private const val RESEND_SAME_MS = 400L
+        private const val RCODE_NXDOMAIN = 3
+        private const val RCODE_SERVFAIL = 2
+        private const val RCODE_REFUSED = 5
         private const val DOH_CONNECTIONS = 4
         private const val DOH_DEADLINE_MS = 5000L
         private const val DOH_BACKOFF_MS = 60_000L

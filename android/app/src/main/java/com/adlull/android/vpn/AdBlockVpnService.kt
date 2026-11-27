@@ -58,6 +58,7 @@ class AdBlockVpnService : VpnService() {
 
         /** VPN을 다시 연결해도 DNS 캐시는 유지 */
         private val sharedCache = DnsCache()
+        private const val SAVE_INTERVAL_MS = 10 * 60 * 1000L
 
         private fun send(ctx: Context, action: String) {
             val i = Intent(ctx, AdBlockVpnService::class.java).setAction(action)
@@ -78,6 +79,7 @@ class AdBlockVpnService : VpnService() {
         engine = DnsEngine(EngineHost(), cache = sharedCache)
         upstream = Upstream(this) { if (::engine.isInitialized) engine.requestRebind() }
         engine.start()
+        if (sharedCache.size() == 0) Thread({ loadCache() }, "dns-cache-load").start()
         Diagnostics.poolInfo = {
             "대기 중 질의 ${engine.pendingCount()}개 · 앱 조회 ${engine.ownerLookups}회 · SERVFAIL ${engine.servfails}회"
         }
@@ -102,6 +104,7 @@ class AdBlockVpnService : VpnService() {
             if (blocked) updateNotification()
         }
         override fun servers(): List<InetSocketAddress> = upstream.servers()
+        override fun raceServers(): List<InetSocketAddress> = upstream.raceServers()
         override fun cacheScope() = upstream.scope()
         override fun dohUrl() = upstream.dohUrl()
         override fun onResolved(ms: Long, fromCache: Boolean) {
@@ -141,6 +144,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(periodicSave)
         stopVpn()
         engine.stop()
         upstream.close()
@@ -188,11 +192,14 @@ class AdBlockVpnService : VpnService() {
         Stats.running.value = true
         Prefs.wasRunning = true
         reader = Thread({ readLoop(pfd) }, "vpn-reader").also { it.start() }
+        mainHandler.removeCallbacks(periodicSave)
+        mainHandler.postDelayed(periodicSave, SAVE_INTERVAL_MS)
         Diagnostics.vpnStarts++
         QuickTileService.refresh(this)
     }
 
     private fun stopVpn() {
+        if (tun != null) saveCacheAsync()
         reader?.interrupt()
         reader = null
         runCatching { tun?.close() }
@@ -242,6 +249,33 @@ class AdBlockVpnService : VpnService() {
     }
 
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    // ---------------- DNS 캐시 저장 (앱이 다시 시작돼도 처음부터 빠르게) ----------------
+
+    private val cacheFile by lazy { java.io.File(filesDir, "dns-cache.bin") }
+
+    private val periodicSave = object : Runnable {
+        override fun run() {
+            saveCacheAsync()
+            mainHandler.postDelayed(this, SAVE_INTERVAL_MS)
+        }
+    }
+
+    private fun loadCache() {
+        runCatching {
+            java.io.DataInputStream(java.io.BufferedInputStream(cacheFile.inputStream())).use { sharedCache.load(it) }
+        }
+    }
+
+    private fun saveCacheAsync() {
+        Thread({
+            runCatching {
+                val tmp = java.io.File(filesDir, "dns-cache.tmp")
+                java.io.DataOutputStream(java.io.BufferedOutputStream(tmp.outputStream())).use { sharedCache.save(it) }
+                tmp.renameTo(cacheFile)
+            }
+        }, "dns-cache-save").start()
+    }
     private var restarts = 0
 
     private fun write(packet: ByteArray) {
