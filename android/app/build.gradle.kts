@@ -27,6 +27,12 @@ android {
         System.getenv("ADLULL_KEY_ALIAS")?.let { put("keyAlias", it) }
         System.getenv("ADLULL_KEY_PASSWORD")?.let { put("keyPassword", it) }
     }
+    // storeFile에 적힌 파일이 없으면(키 파일 이름을 바꾼 경우) android/ 폴더의 .jks 파일을 자동으로 사용
+    if (signing.getProperty("storeFile")?.let { rootProject.file(it).exists() } != true) {
+        rootProject.projectDir.listFiles { f -> f.name.endsWith(".jks") }?.singleOrNull()?.let {
+            signing.setProperty("storeFile", it.name)
+        }
+    }
     val hasReleaseKey = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { !signing.getProperty(it).isNullOrBlank() }
 
     signingConfigs {
