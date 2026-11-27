@@ -74,6 +74,7 @@ class DnsEngineTest {
         val upstreams: List<InetSocketAddress>,
         val blocked: Set<String> = emptySet(),
         val appRules: Boolean = false,
+        val lookupDelayMs: Long = 2,
     ) : DnsEngine.Host {
         val out = LinkedBlockingQueue<ByteArray>()
         val ownerCalls = AtomicInteger()
@@ -86,7 +87,7 @@ class DnsEngineTest {
         override fun logEnabled() = true
         override fun lookupOwner(packet: UdpPacket): AppOwner? {
             ownerCalls.incrementAndGet()
-            Thread.sleep(2) // 시스템 호출 비용 흉내
+            Thread.sleep(lookupDelayMs) // 시스템 호출 비용 흉내
             return AppOwner("some.app", "앱")
         }
         override fun record(name: String, qtype: Int, blocked: Boolean, owner: AppOwner?) {}
@@ -238,6 +239,26 @@ class DnsEngineTest {
         val r = take(h)!!
         assertEquals(2, idOf(r.payload))
         assertEquals(0, rcodeOf(r.payload))
+    }
+
+    /** 앱 조회가 느려도 차단 응답과 캐시 응답은 기다리지 않고 바로 나가야 함 */
+    @Test fun slowAppLookupNeverDelaysBlockedOrCachedAnswers() {
+        val up = fakeDns()
+        val h = FakeHost(listOf(up.address), blocked = setOf("ads.example"), lookupDelayMs = 300)
+        val e = engine(h)
+        var t0 = System.nanoTime()
+        send(e, 1, "ads.example", 49000)
+        assertNotNull(take(h))
+        val blockedMs = (System.nanoTime() - t0) / 1_000_000
+        send(e, 2, "site.example", 49001)
+        assertNotNull(take(h)) // 업스트림으로 한 번 받아 캐시에 저장
+        Thread.sleep(400)
+        t0 = System.nanoTime()
+        send(e, 3, "site.example", 49002)
+        assertNotNull(take(h))
+        val cachedMs = (System.nanoTime() - t0) / 1_000_000
+        assertTrue("blocked ${blockedMs}ms", blockedMs < 50)
+        assertTrue("cached ${cachedMs}ms", cachedMs < 50)
     }
 
     // ---------------------------------------------------------------- 부하

@@ -157,8 +157,12 @@ class AdBlockVpnService : VpnService() {
             .addAddress(VPN_ADDRESS, 32)
             .addDnsServer(VPN_DNS)
             .addRoute(VPN_DNS, 32)
-            // 터널에는 DNS 패킷만 오므로 MTU를 크게 잡아 큰 DNS 응답(DNSSEC 등)도 한 패킷으로 전달
-            .setMtu(16384)
+            // 중요: IPv6 주소를 추가하지 않은 VPN은 기본적으로 '모든 IPv6 통신을 차단'한다(안드로이드 규칙).
+            // 그러면 IPv6가 기본인 모바일 데이터에서 모든 통신이 IPv4 변환(CLAT)을 거쳐 느려지고 열이 난다.
+            // IPv6는 터널로 받지 않고 원래 네트워크로 그대로 나가도록 허용한다.
+            .allowFamily(OsConstants.AF_INET6)
+            .allowFamily(OsConstants.AF_INET)
+            .setMtu(1500)
             .setBlocking(true)
             .setConfigureIntent(mainIntent())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)

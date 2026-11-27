@@ -104,6 +104,7 @@ class DnsEngine(
     private var ioThread: Thread? = null
     @Volatile private var running = false
     @Volatile private var rebindRequested = false
+    private var lastRebind = 0L
     /** I/O 스레드가 다음에 깨어날 예정 시각 (lock 안에서만 바꿈) */
     private var plannedWake = Long.MAX_VALUE
 
@@ -190,23 +191,36 @@ class DnsEngine(
         val now = clock()
         val mask = host.match(q.name)
         if (mask != 0) {
-            // 차단 후보: 앱별 규칙이 있으면 반드시, 아니면 통계용으로 여유가 있을 때만 앱 조회
-            if ((host.appRulesActive() || takeToken(now)) &&
-                submitOwner { decide(pkt, q, mask, lookup(pkt), clock()) }
-            ) return
-            decide(pkt, q, mask, null, now)
+            // 앱별 규칙이 있을 때만 앱을 알아낸 뒤 판단. 그 외에는 기다리지 않고 바로 응답
+            if (host.appRulesActive() && submitOwner { decide(pkt, q, mask, lookup(pkt), clock(), true) }) return
+            decide(pkt, q, mask, null, now, false)
             return
         }
         resolve(pkt, q, null, now)
     }
 
-    private fun decide(pkt: UdpPacket, q: DnsQuery, mask: Int, owner: AppOwner?, now: Long) {
+    private fun decide(pkt: UdpPacket, q: DnsQuery, mask: Int, owner: AppOwner?, now: Long, ownerKnown: Boolean) {
         if (host.isBlocked(mask, owner)) {
-            reply(pkt, DnsPackets.blockedResponse(pkt.payload, q, host.nxdomain()))
-            host.record(q.name, q.qtype, true, owner)
+            if (ownerKnown) {
+                reply(pkt, DnsPackets.blockedResponse(pkt.payload, q, host.nxdomain()))
+                host.record(q.name, q.qtype, true, owner)
+            } else {
+                replyNowRecordLater(pkt, q, DnsPackets.blockedResponse(pkt.payload, q, host.nxdomain()), true, now)
+            }
         } else {
             resolve(pkt, q, owner, now)
         }
+    }
+
+    /**
+     * 응답은 즉시 보내고, 통계용 앱 조회는 동시에 따로 진행 (응답을 절대 기다리게 하지 않음).
+     * 조회를 응답보다 먼저 시작해 두어 대부분 앱을 찾을 수 있음.
+     */
+    private fun replyNowRecordLater(pkt: UdpPacket, q: DnsQuery, response: ByteArray, blocked: Boolean, now: Long) {
+        val submitted = host.logEnabled() && takeToken(now) &&
+            submitOwner { host.record(q.name, q.qtype, blocked, lookup(pkt)) }
+        reply(pkt, response)
+        if (!submitted) host.record(q.name, q.qtype, blocked, null)
     }
 
     private fun resolve(pkt: UdpPacket, q: DnsQuery, knownOwner: AppOwner?, now: Long) {
@@ -215,15 +229,12 @@ class DnsEngine(
         if (hit != null) {
             if (hit.stale) enqueue(null, q, pkt.payload, scope, now) // 뒤에서 새로 받아 둠
             host.onResolved(0, true)
-            if (knownOwner == null && host.logEnabled() && takeToken(now) &&
-                submitOwner {
-                    val o = lookup(pkt)
-                    reply(pkt, hit.response)
-                    host.record(q.name, q.qtype, false, o)
-                }
-            ) return
-            reply(pkt, hit.response)
-            host.record(q.name, q.qtype, false, knownOwner)
+            if (knownOwner != null) {
+                reply(pkt, hit.response)
+                host.record(q.name, q.qtype, false, knownOwner)
+            } else {
+                replyNowRecordLater(pkt, q, hit.response, false, now)
+            }
             return
         }
         val w = Waiter(pkt, q).also { it.owner = knownOwner }
@@ -306,7 +317,11 @@ class DnsEngine(
     // ------------------------------------------------------------ 업스트림 송수신
 
     private fun sendNextLocked(p: Pending, now: Long) {
-        if (channels.isEmpty()) return
+        if (channels.isEmpty()) { // 소켓을 못 연 상태: 1ms마다 헛돌지 않도록 다음 시도를 미룸
+            p.nextSendAt = now + 500
+            rebindRequested = true
+            return
+        }
         val server = p.servers[p.attempts % p.servers.size]
         val round = p.attempts / p.servers.size
         p.attempts++
@@ -335,8 +350,9 @@ class DnsEngine(
         val buf = ByteBuffer.allocate(65535)
         while (running) {
             try {
-                if (rebindRequested) {
+                if (rebindRequested && clock() - lastRebind >= 500) {
                     rebindRequested = false
+                    lastRebind = clock()
                     rebindChannels(sel)
                 }
                 val now = clock()
@@ -345,7 +361,8 @@ class DnsEngine(
                     plannedWake = w
                     w
                 }
-                val timeout = if (wake == Long.MAX_VALUE) IDLE_TIMEOUT_MS else (wake - now).coerceIn(1L, 1000L)
+                var timeout = if (wake == Long.MAX_VALUE) IDLE_TIMEOUT_MS else (wake - now).coerceIn(1L, 1000L)
+                if (rebindRequested) timeout = minOf(timeout, 500L)
                 sel.select(timeout)
                 val it = sel.selectedKeys().iterator()
                 while (it.hasNext()) {
