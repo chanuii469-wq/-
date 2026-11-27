@@ -78,7 +78,7 @@ class AdBlockVpnService : VpnService() {
         super.onCreate()
         // 평소엔 스레드 4개, 느린 업스트림이 몰리면 최대 64개까지. 그 이상은 버림(앱이 재시도함)
         upstream = Upstream(this)
-        pool = ThreadPoolExecutor(4, 64, 30, TimeUnit.SECONDS, SynchronousQueue())
+        pool = ThreadPoolExecutor(8, 64, 30, TimeUnit.SECONDS, SynchronousQueue())
         resolver = Resolver(upstream::resolve, upstream::scope, pool)
     }
 
@@ -195,7 +195,9 @@ class AdBlockVpnService : VpnService() {
         val mask = Stats.blocklist.match(query.name)
         // 차단 후보이거나 기록이 켜져 있을 때만 요청한 앱을 조회 (binder 호출 비용 절약)
         val hot = Prefs.hot
-        val owner = if (mask != 0 || hot.logQueries) ownerApp(pkt) else null
+        // 차단 후보일 때만 응답 전에 요청한 앱을 조회 (앱별 설정을 적용해야 하므로).
+        // 일반 요청은 응답을 먼저 받아 온 뒤 기록용으로만 조회해 지연을 늘리지 않음
+        var owner = if (mask != 0) ownerApp(pkt) else null
         val rule = owner?.pkg?.let { AppRules[it] } ?: AppRule()
         val blocked = (mask and (Blocklist.ADS or Blocklist.USER) != 0 && rule.ads) ||
             (mask and Blocklist.TRACKERS != 0 && rule.trackers)
@@ -205,8 +207,10 @@ class AdBlockVpnService : VpnService() {
         } else {
             resolver.resolve(pkt.payload, query) ?: return
         }
+        if (owner == null && hot.logQueries) owner = ownerApp(pkt)
+        val logIt = owner?.pkg?.let { AppRules[it].log } ?: true
         write(IpPackets.buildUdp(pkt.dstIp, pkt.srcIp, pkt.dstPort, pkt.srcPort, response))
-        Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, rule.log)
+        Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, logIt)
         if (blocked) updateNotification()
     }
 

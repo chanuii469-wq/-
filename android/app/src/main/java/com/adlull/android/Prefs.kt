@@ -6,20 +6,31 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 enum class UpstreamDns(val label: String, val ips: List<String>, val dohUrl: String?) {
-    SYSTEM("시스템 기본 DNS", emptyList(), null),
+    SYSTEM("통신사·와이파이 기본 DNS (가장 빠름)", emptyList(), null),
     CLOUDFLARE("Cloudflare (1.1.1.1)", listOf("1.1.1.1", "1.0.0.1", "2606:4700:4700::1111"), "https://1.1.1.1/dns-query"),
     GOOGLE("Google (8.8.8.8)", listOf("8.8.8.8", "8.8.4.4", "2001:4860:4860::8888"), "https://8.8.8.8/dns-query"),
-    QUAD9("Quad9 (9.9.9.9)", listOf("9.9.9.9", "149.112.112.112", "2620:fe::fe"), "https://9.9.9.9/dns-query"),
+    QUAD9("Quad9 (9.9.9.9)", listOf("9.9.9.9", "149.112.112.112", "2620:fe::fe"), "https://9.9.9.9/dns-query");
+
+    /** IP 문자열을 미리 InetAddress로 변환해 둠 (요청마다 변환하지 않도록) */
+    val addresses: List<java.net.InetAddress> by lazy { ips.map { java.net.InetAddress.getByName(it) } }
 }
 
 /** 앱 설정. UI가 관찰할 수 있도록 변경 시 version을 올림 */
 object Prefs {
     private lateinit var sp: SharedPreferences
+    // 통계는 자주 저장되므로 설정과 다른 파일에 둠 (설정 화면이 저장 때마다 다시 그려지지 않도록)
+    private lateinit var statsSp: SharedPreferences
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
     fun init(ctx: Context) {
         sp = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        statsSp = ctx.getSharedPreferences("stats", Context.MODE_PRIVATE)
+        if (sp.contains("total_queries")) { // 이전 버전에서 옮기기
+            statsSp.edit().putLong("total_queries", sp.getLong("total_queries", 0))
+                .putLong("total_blocked", sp.getLong("total_blocked", 0)).apply()
+            sp.edit().remove("total_queries").remove("total_blocked").apply()
+        }
         sp.registerOnSharedPreferenceChangeListener(listener)
         refreshHot()
     }
@@ -34,7 +45,7 @@ object Prefs {
     class Hot(val upstream: UpstreamDns, val useDoh: Boolean, val nxdomain: Boolean, val logQueries: Boolean)
 
     @Volatile
-    var hot = Hot(UpstreamDns.CLOUDFLARE, true, false, true)
+    var hot = Hot(UpstreamDns.SYSTEM, false, false, true)
         private set
 
     private fun refreshHot() {
@@ -42,11 +53,11 @@ object Prefs {
     }
 
     var upstream: UpstreamDns
-        get() = runCatching { UpstreamDns.valueOf(sp.getString("upstream", "CLOUDFLARE")!!) }.getOrDefault(UpstreamDns.CLOUDFLARE)
+        get() = runCatching { UpstreamDns.valueOf(sp.getString("upstream", "SYSTEM")!!) }.getOrDefault(UpstreamDns.SYSTEM)
         set(v) = sp.edit().putString("upstream", v.name).apply()
 
     var useDoh: Boolean
-        get() = sp.getBoolean("doh", true)
+        get() = sp.getBoolean("doh", false)
         set(v) = sp.edit().putBoolean("doh", v).apply()
 
     var nxdomain: Boolean
@@ -85,11 +96,9 @@ object Prefs {
         get() = sp.getString("subscriptions", null)
         set(v) = sp.edit().putString("subscriptions", v).apply()
 
-    var totalQueries: Long
-        get() = sp.getLong("total_queries", 0)
-        set(v) = sp.edit().putLong("total_queries", v).apply()
+    val totalQueries: Long get() = statsSp.getLong("total_queries", 0)
+    val totalBlocked: Long get() = statsSp.getLong("total_blocked", 0)
 
-    var totalBlocked: Long
-        get() = sp.getLong("total_blocked", 0)
-        set(v) = sp.edit().putLong("total_blocked", v).apply()
+    fun saveTotals(queries: Long, blocked: Long) =
+        statsSp.edit().putLong("total_queries", queries).putLong("total_blocked", blocked).apply()
 }

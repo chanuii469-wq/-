@@ -13,6 +13,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import com.adlull.android.dns.DnsCache
 import com.adlull.android.vpn.Resolver
+import com.adlull.android.vpn.Upstream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -252,5 +257,40 @@ class FilterAndDnsTest {
         assertEquals(10, rst[31].toInt()) // ack = seq + 1
         assertEquals(0x14, rst[33].toInt()) // RST|ACK
         assertNull(IpPackets.tcpResetFor(rst, 40)) // RST에는 응답 안 함
+    }
+
+    /** 첫 서버가 응답하지 않으면 0.4초 뒤 다음 서버에 보내 그 응답을 사용 */
+    @Test fun hedgedUdpFallsThroughToSecondServer() {
+        val lo = InetAddress.getLoopbackAddress()
+        DatagramSocket(0, lo).use { silent ->
+            DatagramSocket(0, lo).use { good ->
+                val q = dnsQuery("a.com", 1)
+                val t = Thread {
+                    val buf = ByteArray(512); val p = DatagramPacket(buf, buf.size)
+                    good.receive(p)
+                    val ans = answer(buf.copyOf(p.length), 60)
+                    good.send(DatagramPacket(ans, ans.size, p.socketAddress))
+                }.apply { start() }
+                val t0 = System.currentTimeMillis()
+                val r = Upstream.hedgedUdp(
+                    listOf(InetSocketAddress(lo, silent.localPort), InetSocketAddress(lo, good.localPort)), q,
+                )
+                val ms = System.currentTimeMillis() - t0
+                t.join(2000)
+                assertNotNull(r)
+                assertEquals(good.localPort.let { lo }, r!!.first)
+                assertEquals(q[0], r.second[0]); assertEquals(0x81.toByte(), r.second[2])
+                assertTrue("took ${ms}ms", ms in 350..1500)
+            }
+        }
+    }
+
+    @Test fun hedgedUdpGivesUpAtDeadline() {
+        val lo = InetAddress.getLoopbackAddress()
+        DatagramSocket(0, lo).use { silent ->
+            val t0 = System.currentTimeMillis()
+            assertNull(Upstream.hedgedUdp(listOf(InetSocketAddress(lo, silent.localPort)), dnsQuery("a.com", 1), totalMs = 600))
+            assertTrue(System.currentTimeMillis() - t0 < 1500)
+        }
     }
 }

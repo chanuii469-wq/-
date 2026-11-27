@@ -64,7 +64,7 @@ fun SettingsScreen(modifier: Modifier) {
         }
         SwitchRow(
             "암호화 DNS (DNS-over-HTTPS)",
-            "통신사·공유기가 방문 기록을 볼 수 없게 DNS를 암호화해요",
+            "통신사·공유기가 방문 기록을 볼 수 없게 DNS를 암호화해요. 켜면 페이지 로딩이 조금 느려질 수 있어요",
             Prefs.useDoh, enabled = Prefs.upstream != UpstreamDns.SYSTEM,
         ) { Prefs.useDoh = it }
 

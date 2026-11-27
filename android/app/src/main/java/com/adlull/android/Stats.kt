@@ -105,7 +105,7 @@ object Stats {
             if (logBuf.size > LOG_SIZE) logBuf.removeLast()
             logDirty = true
         }
-        if (++unsaved >= 100) save()
+        if (++unsaved >= 500) save()
     }
 
     /** 앱별 (전체 요청, 차단) 수 — 이번 실행 기준 */
@@ -115,8 +115,7 @@ object Stats {
     @Synchronized
     fun save() {
         unsaved = 0
-        Prefs.totalQueries = queries
-        Prefs.totalBlocked = blocked
+        Prefs.saveTotals(queries, blocked)
     }
 
     @Synchronized
