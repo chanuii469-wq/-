@@ -3,7 +3,7 @@
 광고 차단기 두 가지가 들어 있습니다.
 
 > ⚠️ **개인용입니다.** 공개 배포하지 않습니다. 저장소는 비공개로 유지하고, APK는 본인 기기에만 설치하세요.
-> 공개 배포 전에 정리할 것: 앱 이름 상표 확인 · 필터 목록별 이용 조건 확인 · 정식 서명 키 · 오픈소스 라이선스 고지 · 개인정보 처리방침.
+> 공개 배포 전에 남은 일: 앱 이름 상표 확인 · 개인정보 처리방침. (필터 목록 정리, 라이선스 고지, 정식 서명 키는 완료)
 
 - [`android/`](android/) — **안드로이드 앱**: 로컬 VPN으로 모든 앱의 광고·추적기를 차단
 - 저장소 루트 — **크롬 확장 프로그램**
@@ -16,7 +16,8 @@
 
 #### 기능
 - **모든 앱 광고 차단**: 게임·앱 광고 SDK(AdMob, Unity Ads, AppLovin, 카울리 등), 웹 광고, 추적기
-- **필터 구독**: AdGuard DNS 필터, StevenBlack hosts, OISD, Peter Lowe 목록 + URL로 직접 추가 · 매일 자동 업데이트
+- **필터 구독**: AdGuard DNS 필터(GPL-3.0), StevenBlack hosts(MIT) + URL로 직접 추가 · 매일 자동 업데이트. 외부 목록은 앱에 포함하지 않고 켜면 배포처에서 직접 내려받음
+- **오픈소스 라이선스**: 설정 › 정보에서 사용한 라이브러리와 필터 목록의 저작권·라이선스 확인
 - **DNS 요청 기록**: 어떤 앱이 어떤 도메인에 접속하는지 실시간 확인(Android 10 이상), 눌러서 바로 차단/허용
 - **통계**: 차단 수, 차단율, 광고를 가장 많이 요청한 앱, 가장 많이 차단된 도메인
 - **앱별 세부 설정**: 앱마다 AdShield 적용 여부, 광고 차단, 추적기 차단, 요청 기록을 따로 켜고 끄기 (적용 여부 외의 항목은 Android 10 이상). 앱별 요청·차단 수와 최근 요청 확인
@@ -26,7 +27,7 @@
 - **빠른 설정 타일**, **부팅 시 자동 시작**, **상시 VPN** 지원
 
 ### 설치
-1. `AdShield-1.1.0.apk`를 휴대폰에 옮기거나, GitHub **Actions → Android APK → AdShield-apk** 에서 내려받습니다.
+1. `AdShield-1.2.0.apk`를 휴대폰에 옮기거나, GitHub **Actions → Android APK → AdShield-apk** 에서 내려받습니다.
 2. 파일을 열고 "출처를 알 수 없는 앱 설치"를 허용해 설치합니다.
 3. 앱에서 방패를 누르고 VPN 연결 요청을 허용합니다.
 
@@ -42,6 +43,17 @@ cd android
 ./gradlew testReleaseUnitTest
 ```
 Android SDK(API 35)와 JDK 17이 필요합니다.
+
+### 서명 키
+릴리스 APK는 정식 서명 키로 서명합니다. 키 파일은 **저장소에 올리지 않습니다** (`.gitignore` 처리).
+
+- **직접 빌드할 때**: `adshield-release.jks`와 `keystore.properties`를 `android/` 폴더에 넣고 빌드
+- **GitHub Actions로 빌드할 때**: 저장소 Settings › Secrets and variables › Actions에 아래 4개를 등록
+  - `ADSHIELD_KEYSTORE_BASE64`: `base64 -w0 adshield-release.jks` 출력값
+  - `ADSHIELD_STORE_PASSWORD`, `ADSHIELD_KEY_PASSWORD`: `keystore.properties`의 비밀번호
+  - `ADSHIELD_KEY_ALIAS`: `adshield`
+- 키가 없으면 디버그 키로 서명됩니다(이 경우 기존 앱 위에 덮어 설치 불가).
+- **키를 잃어버리면 같은 앱으로 업데이트할 수 없습니다.** 안전한 곳에 백업해 두세요.
 
 ---
 

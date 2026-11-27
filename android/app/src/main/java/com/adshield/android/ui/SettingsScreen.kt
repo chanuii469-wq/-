@@ -40,6 +40,11 @@ fun SettingsScreen(modifier: Modifier) {
     @Suppress("UNUSED_VARIABLE")
     val v by Prefs.version.collectAsStateWithLifecycle()
     var confirmReset by remember { mutableStateOf(false) }
+    var showLicenses by remember { mutableStateOf(false) }
+    if (showLicenses) {
+        LicensesScreen(modifier) { showLicenses = false }
+        return
+    }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Header("DNS 서버")
@@ -82,8 +87,12 @@ fun SettingsScreen(modifier: Modifier) {
         Header("통계")
         ClickRow("통계 초기화", "차단 수와 기록을 모두 지워요") { confirmReset = true }
 
+        HorizontalDivider()
+        Header("정보")
+        ClickRow("오픈소스 라이선스", "앱에 쓰인 라이브러리와 필터 목록의 저작권·라이선스") { showLicenses = true }
+
         Text(
-            "AdShield 1.0 · DNS 기반 광고 차단\n유튜브 영상 광고처럼 콘텐츠와 같은 서버에서 나오는 광고는 DNS로 막을 수 없어요.",
+            "AdShield ${com.adshield.android.BuildConfig.VERSION_NAME} · DNS 기반 광고 차단\n유튜브 영상 광고처럼 콘텐츠와 같은 서버에서 나오는 광고는 DNS로 막을 수 없어요.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(16.dp),

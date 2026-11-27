@@ -50,16 +50,6 @@ object FilterManager {
             "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
             "광고·악성코드 도메인 hosts 목록", enabled = false,
         ),
-        FilterSub(
-            "oisd_small", "OISD small",
-            "https://small.oisd.nl/",
-            "오차단이 적은 범용 차단 목록", enabled = false,
-        ),
-        FilterSub(
-            "pgl", "Peter Lowe's list",
-            "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
-            "가벼운 광고 서버 목록", enabled = false,
-        ),
     )
 
     private lateinit var appCtx: Context
@@ -76,7 +66,11 @@ object FilterManager {
 
     fun init(ctx: Context) {
         appCtx = ctx.applicationContext
-        _subs.value = loadSubs()
+        val subs = loadSubs()
+        saveSubs(subs)
+        // 목록에서 빠진 필터(이전 버전 기본 목록 등)의 파일 정리
+        val keep = subs.map { "${it.id}.txt" }.toSet()
+        dir().listFiles()?.filter { it.name !in keep }?.forEach { it.delete() }
     }
 
     private fun dir() = File(appCtx.filesDir, "filters").apply { mkdirs() }

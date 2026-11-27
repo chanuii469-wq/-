@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +14,30 @@ android {
         applicationId = "com.adshield.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
+    }
+
+    // 서명 키: android/keystore.properties 파일 또는 환경변수(CI)에서 읽음. 없으면 디버그 키로 서명
+    val signing = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+        System.getenv("ADSHIELD_STORE_FILE")?.let { put("storeFile", it) }
+        System.getenv("ADSHIELD_STORE_PASSWORD")?.let { put("storePassword", it) }
+        System.getenv("ADSHIELD_KEY_ALIAS")?.let { put("keyAlias", it) }
+        System.getenv("ADSHIELD_KEY_PASSWORD")?.let { put("keyPassword", it) }
+    }
+    val hasReleaseKey = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { !signing.getProperty(it).isNullOrBlank() }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = rootProject.file(signing.getProperty("storeFile"))
+                storePassword = signing.getProperty("storePassword")
+                keyAlias = signing.getProperty("keyAlias")
+                keyPassword = signing.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -21,8 +45,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // 별도 키가 없으면 디버그 키로 서명해서 바로 설치할 수 있게 함
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }
     }
     compileOptions {
@@ -34,6 +57,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
