@@ -120,7 +120,7 @@ fun AppsScreen(modifier: Modifier) {
             modifier = Modifier.padding(start = 16.dp, top = 16.dp),
         )
         Text(
-            "스위치로 앱마다 Adlull 적용 여부를 정하고, 앱을 누르면 광고·추적기 차단을 따로 설정할 수 있어요.",
+            "문제가 있는 앱은 스위치를 꺼서 Adlull에서 빼고 다시 실행해 보세요. 앱을 누르면 광고·추적기 차단을 따로 설정할 수 있어요.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp),

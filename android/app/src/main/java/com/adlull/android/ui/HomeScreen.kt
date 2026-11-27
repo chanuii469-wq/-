@@ -131,6 +131,16 @@ fun HomeScreen(modifier: Modifier, onStart: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        if (running) {
+            Card(Modifier.fillMaxWidth()) {
+                Text(
+                    "💡 어떤 앱이 이상하게 동작하면 '앱' 탭에서 그 앱의 스위치를 꺼서 Adlull에서 빼고 다시 실행해 보세요.",
+                    Modifier.padding(14.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
         if (topApps.isNotEmpty()) RankCard("광고를 가장 많이 요청한 앱", topApps)
         if (topDomains.isNotEmpty()) RankCard("가장 많이 차단된 도메인", topDomains)
     }

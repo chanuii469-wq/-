@@ -10,7 +10,11 @@ import java.io.ByteArrayOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.HttpURLConnection
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.URL
 
 /** 차단되지 않은 DNS 질의를 실제 DNS 서버로 전달 */
@@ -36,7 +40,7 @@ class Upstream(private val service: VpnService) {
     }
 
     private fun udp(server: InetAddress, query: ByteArray): ByteArray? = try {
-        DatagramSocket().use { sock ->
+        val r = DatagramSocket().use { sock ->
             service.protect(sock)
             sock.soTimeout = 2500
             sock.send(DatagramPacket(query, query.size, server, 53))
@@ -44,6 +48,25 @@ class Upstream(private val service: VpnService) {
             val p = DatagramPacket(buf, buf.size)
             sock.receive(p)
             buf.copyOf(p.length)
+        }
+        // 응답이 잘렸으면(TC) 같은 서버에 TCP로 다시 받아 온전한 응답을 전달
+        if (r.size > 2 && r[2].toInt() and 0x02 != 0) tcp(server, query) ?: r else r
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun tcp(server: InetAddress, query: ByteArray): ByteArray? = try {
+        Socket().use { s ->
+            service.protect(s)
+            s.connect(InetSocketAddress(server, 53), 2500)
+            s.soTimeout = 3000
+            val out = DataOutputStream(s.getOutputStream())
+            out.writeShort(query.size)
+            out.write(query)
+            out.flush()
+            val input = DataInputStream(s.getInputStream())
+            val len = input.readUnsignedShort()
+            ByteArray(len).also { input.readFully(it) }
         }
     } catch (e: Exception) {
         null

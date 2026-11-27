@@ -22,7 +22,6 @@ import com.adlull.android.AppRules
 import com.adlull.android.Prefs
 import com.adlull.android.R
 import com.adlull.android.Stats
-import com.adlull.android.dns.DnsCache
 import com.adlull.android.dns.DnsPackets
 import com.adlull.android.dns.IpPackets
 import com.adlull.android.dns.UdpPacket
@@ -34,6 +33,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -69,7 +69,7 @@ class AdBlockVpnService : VpnService() {
     private var out: FileOutputStream? = null
     private lateinit var pool: ExecutorService
     private lateinit var upstream: Upstream
-    private val cache = DnsCache()
+    private lateinit var resolver: Resolver
     private class Owner(val pkg: String?, val label: String)
     private val owners = ConcurrentHashMap<Int, Owner>()
     private var lastNotify = 0L
@@ -77,8 +77,9 @@ class AdBlockVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         // 평소엔 스레드 4개, 느린 업스트림이 몰리면 최대 64개까지. 그 이상은 버림(앱이 재시도함)
-        pool = ThreadPoolExecutor(4, 64, 30, TimeUnit.SECONDS, SynchronousQueue(), ThreadPoolExecutor.DiscardPolicy())
         upstream = Upstream(this)
+        pool = ThreadPoolExecutor(4, 64, 30, TimeUnit.SECONDS, SynchronousQueue())
+        resolver = Resolver(upstream::resolve, upstream::scope, pool)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -123,7 +124,8 @@ class AdBlockVpnService : VpnService() {
             .addAddress(VPN_ADDRESS, 32)
             .addDnsServer(VPN_DNS)
             .addRoute(VPN_DNS, 32)
-            .setMtu(1500)
+            // 터널에는 DNS 패킷만 오므로 MTU를 크게 잡아 큰 DNS 응답(DNSSEC 등)도 한 패킷으로 전달
+            .setMtu(16384)
             .setBlocking(true)
             .setConfigureIntent(mainIntent())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
@@ -153,7 +155,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun stopVpn() {
-        cache.clear()
+        if (::resolver.isInitialized) resolver.clear()
         reader?.interrupt()
         reader = null
         runCatching { tun?.close() }
@@ -171,9 +173,17 @@ class AdBlockVpnService : VpnService() {
             while (!Thread.currentThread().isInterrupted) {
                 val n = input.read(buf)
                 if (n <= 0) continue
-                val pkt = IpPackets.parseUdp(buf, n) ?: continue
+                val pkt = IpPackets.parseUdp(buf, n)
+                if (pkt == null) {
+                    IpPackets.tcpResetFor(buf, n)?.let { write(it) }
+                    continue
+                }
                 if (pkt.dstPort != 53) continue
-                pool.execute { handleDns(pkt) }
+                try {
+                    pool.execute { handleDns(pkt) }
+                } catch (_: RejectedExecutionException) {
+                    // 너무 몰리면 버림 (앱이 재시도함)
+                }
             }
         } catch (e: Exception) {
             // tun이 닫히면 여기로 옴
@@ -193,10 +203,7 @@ class AdBlockVpnService : VpnService() {
         val response = if (blocked) {
             DnsPackets.blockedResponse(pkt.payload, query, hot.nxdomain)
         } else {
-            val scope = upstream.scope()
-            cache.get(pkt.payload, query, scope) ?: (upstream.resolve(pkt.payload) ?: return).also {
-                cache.put(query, it, scope)
-            }
+            resolver.resolve(pkt.payload, query) ?: return
         }
         write(IpPackets.buildUdp(pkt.dstIp, pkt.srcIp, pkt.dstPort, pkt.srcPort, response))
         Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, rule.log)

@@ -219,11 +219,11 @@ object FilterManager {
             }
             conn.disconnect()
             // 규칙 수 계산
-            var rules = 0
-            tmp.useLines { seq -> seq.forEach { if (Blocklist.parseRule(it) != null) rules++ } }
-            if (rules == 0) throw IllegalStateException("no rules")
+            // 규칙이 하나라도 있는지만 확인 (전체 해석은 rebuild에서 한 번만 함)
+            val valid = tmp.useLines { seq -> seq.any { Blocklist.parseRule(it) != null } }
+            if (!valid) throw IllegalStateException("no rules")
             tmp.renameTo(fileFor(s))
-            update(s.id) { it.copy(lastUpdated = System.currentTimeMillis(), ruleCount = rules) }
+            update(s.id) { it.copy(lastUpdated = System.currentTimeMillis()) }
             true
         } catch (e: Exception) {
             Log.w(TAG, "download failed: ${s.url}", e)
@@ -271,18 +271,14 @@ object FilterManager {
         val builder = Blocklist.Builder()
         for (s in _subs.value.filter { it.enabled }) {
             try {
-                if (s.url?.startsWith("asset:") == true) {
-                    var n = 0
-                    appCtx.assets.open(s.url.removePrefix("asset:")).bufferedReader().useLines { seq ->
-                        seq.forEach { n += Blocklist.parseLine(it, builder, s.category) }
-                    }
-                    if (s.ruleCount == 0) update(s.id) { it.copy(ruleCount = n) }
+                var n = 0
+                val reader = if (s.url?.startsWith("asset:") == true) {
+                    appCtx.assets.open(s.url.removePrefix("asset:")).bufferedReader()
                 } else {
-                    val f = fileFor(s)
-                    if (f.exists()) f.bufferedReader().useLines { seq ->
-                        seq.forEach { Blocklist.parseLine(it, builder, s.category) }
-                    }
+                    fileFor(s).takeIf { it.exists() }?.bufferedReader()
                 }
+                reader?.useLines { seq -> seq.forEach { n += Blocklist.parseLine(it, builder, s.category) } }
+                if (reader != null && s.ruleCount != n) update(s.id) { it.copy(ruleCount = n) }
             } catch (e: Exception) {
                 Log.w(TAG, "load failed: ${s.id}", e)
             }

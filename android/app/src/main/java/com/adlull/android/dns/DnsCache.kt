@@ -5,7 +5,12 @@ package com.adlull.android.dns
  * 같은 도메인을 반복 조회할 때 네트워크 왕복 없이 바로 응답해 지연과 배터리를 줄인다.
  */
 class DnsCache(private val maxEntries: Int = 2048) {
-    private class Entry(val response: ByteArray, val expiresAt: Long)
+    private class Entry(val response: ByteArray, val expiresAt: Long, val ttlMs: Long) {
+        var hits = 0
+    }
+
+    /** stale=true면 곧 만료되는 인기 항목이라 미리 갱신하는 게 좋음 */
+    class Hit(val response: ByteArray, val stale: Boolean)
 
     private val map = object : LinkedHashMap<String, Entry>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>) = size > maxEntries
@@ -14,11 +19,9 @@ class DnsCache(private val maxEntries: Int = 2048) {
     var hits = 0L; private set
     var misses = 0L; private set
 
-    private fun key(q: DnsQuery, scope: String) = "$scope|${q.qtype}|${q.name}"
-
     /** 캐시된 응답을 질의 ID에 맞춰 돌려줌 */
     @Synchronized
-    fun get(query: ByteArray, q: DnsQuery, scope: String, now: Long = System.currentTimeMillis()): ByteArray? {
+    fun lookup(query: ByteArray, q: DnsQuery, scope: String, now: Long = System.currentTimeMillis()): Hit? {
         val k = key(q, scope)
         val e = map[k]
         if (e == null || e.expiresAt <= now) {
@@ -27,16 +30,20 @@ class DnsCache(private val maxEntries: Int = 2048) {
             return null
         }
         hits++
-        val r = e.response.copyOf()
-        r[0] = query[0]; r[1] = query[1]
-        return r
+        e.hits++
+        // 두 번 이상 쓰였고 남은 시간이 TTL의 10% 미만이면 미리 갱신 대상
+        val stale = e.hits >= 2 && e.expiresAt - now < e.ttlMs / 10
+        return Hit(withId(e.response, query), stale)
     }
+
+    fun get(query: ByteArray, q: DnsQuery, scope: String, now: Long = System.currentTimeMillis()): ByteArray? =
+        lookup(query, q, scope, now)?.response
 
     @Synchronized
     fun put(q: DnsQuery, response: ByteArray, scope: String, now: Long = System.currentTimeMillis()) {
         val ttl = cacheTtl(response) ?: return
         if (ttl <= 0) return
-        map[key(q, scope)] = Entry(response, now + ttl * 1000L)
+        map[key(q, scope)] = Entry(response, now + ttl * 1000L, ttl * 1000L)
     }
 
     @Synchronized
@@ -44,6 +51,15 @@ class DnsCache(private val maxEntries: Int = 2048) {
 
     companion object {
         private const val MAX_TTL = 3600L
+
+        fun key(q: DnsQuery, scope: String) = "$scope|${q.qtype}|${q.name}"
+
+        /** 응답의 ID를 질의 ID로 바꾼 복사본 */
+        fun withId(response: ByteArray, query: ByteArray): ByteArray {
+            val r = response.copyOf()
+            r[0] = query[0]; r[1] = query[1]
+            return r
+        }
         private const val NEGATIVE_TTL = 60L
 
         /**

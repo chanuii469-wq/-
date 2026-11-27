@@ -53,6 +53,40 @@ object IpPackets {
         return p
     }
 
+    /**
+     * 터널로 들어온 TCP SYN(53번 포트)에 RST로 즉시 응답한다.
+     * 큰 DNS 응답을 TCP로 다시 받으려는 시도가 5초씩 기다리지 않고 바로 실패하게 함.
+     * (큰 응답은 업스트림에서 TCP로 받아 UDP로 그대로 전달하므로 보통은 TCP 재시도가 생기지 않음)
+     */
+    fun tcpResetFor(buf: ByteArray, len: Int): ByteArray? {
+        if (len < 40 || (buf[0].toInt() shr 4) and 0xF != 4 || buf[9].toInt() != 6) return null
+        val ihl = (buf[0].toInt() and 0xF) * 4
+        if (len < ihl + 20) return null
+        val flags = buf[ihl + 13].toInt()
+        if (flags and 0x02 == 0 || flags and 0x04 != 0) return null // SYN만, RST에는 응답 안 함
+        val seq = ((buf[ihl + 4].toLong() and 0xFF) shl 24) or ((buf[ihl + 5].toLong() and 0xFF) shl 16) or
+            ((buf[ihl + 6].toLong() and 0xFF) shl 8) or (buf[ihl + 7].toLong() and 0xFF)
+        val ack = (seq + 1) and 0xFFFFFFFFL
+        val p = ByteArray(40)
+        p[0] = 0x45; p[3] = 40; p[6] = 0x40; p[8] = 64; p[9] = 6
+        System.arraycopy(buf, 16, p, 12, 4) // 출발지 = 원래 목적지
+        System.arraycopy(buf, 12, p, 16, 4)
+        val ipCs = checksum(p, 0, 20)
+        p[10] = (ipCs shr 8).toByte(); p[11] = ipCs.toByte()
+        // TCP 헤더: 포트 교환, seq=0, ack=seq+1, RST|ACK
+        p[20] = buf[ihl + 2]; p[21] = buf[ihl + 3]; p[22] = buf[ihl]; p[23] = buf[ihl + 1]
+        p[28] = (ack shr 24).toByte(); p[29] = (ack shr 16).toByte(); p[30] = (ack shr 8).toByte(); p[31] = ack.toByte()
+        p[32] = 0x50; p[33] = 0x14
+        // TCP 체크섬 (의사 헤더 포함)
+        val pseudo = ByteArray(12 + 20)
+        System.arraycopy(p, 12, pseudo, 0, 8)
+        pseudo[9] = 6; pseudo[11] = 20
+        System.arraycopy(p, 20, pseudo, 12, 20)
+        val cs = checksum(pseudo, 0, pseudo.size)
+        p[36] = (cs shr 8).toByte(); p[37] = cs.toByte()
+        return p
+    }
+
     private fun checksum(b: ByteArray, off: Int, len: Int): Int {
         var sum = 0
         var i = off

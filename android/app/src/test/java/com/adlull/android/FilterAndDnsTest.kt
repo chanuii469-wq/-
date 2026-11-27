@@ -12,6 +12,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import com.adlull.android.dns.DnsCache
+import com.adlull.android.vpn.Resolver
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -207,5 +212,45 @@ class FilterAndDnsTest {
         assertEquals(300_000, bl.size)
         assertEquals(100_000, hits)
         assertTrue(compileMs < 20_000)
+    }
+
+    @Test fun resolverCoalescesConcurrentQueries() {
+        val calls = AtomicInteger()
+        val gate = CountDownLatch(1)
+        val q = dnsQuery("same.com", 1)
+        val parsed = DnsPackets.parse(q)!!
+        val pool = Executors.newCachedThreadPool()
+        val r = Resolver({ calls.incrementAndGet(); gate.await(2, TimeUnit.SECONDS); answer(it, 300) }, { "s" }, pool)
+        val futures = (0 until 5).map { i ->
+            pool.submit<ByteArray?> {
+                val qi = q.copyOf(); qi[1] = i.toByte()
+                r.resolve(qi, parsed)
+            }
+        }
+        Thread.sleep(200)
+        gate.countDown()
+        val results = futures.map { it.get(3, TimeUnit.SECONDS)!! }
+        assertEquals(1, calls.get())
+        results.forEachIndexed { i, res -> assertEquals(i.toByte(), res[1]) } // 각자 자기 ID로 응답
+        // 이후 요청은 캐시에서
+        r.resolve(q, parsed)
+        assertEquals(1, calls.get())
+        pool.shutdown()
+    }
+
+    @Test fun tcpSynGetsReset() {
+        val syn = ByteArray(40)
+        syn[0] = 0x45; syn[3] = 40; syn[9] = 6
+        byteArrayOf(10, 111, 222.toByte(), 2).copyInto(syn, 12)
+        byteArrayOf(10, 111, 222.toByte(), 1).copyInto(syn, 16)
+        syn[20] = 0x9C.toByte(); syn[21] = 0x40; syn[23] = 53 // 40000 -> 53
+        syn[24] = 0; syn[25] = 0; syn[26] = 0; syn[27] = 9 // seq=9
+        syn[32] = 0x50; syn[33] = 0x02 // SYN
+        val rst = IpPackets.tcpResetFor(syn, 40)!!
+        assertArrayEquals(syn.copyOfRange(16, 20), rst.copyOfRange(12, 16))
+        assertEquals(53, ((rst[20].toInt() and 0xFF) shl 8) or (rst[21].toInt() and 0xFF))
+        assertEquals(10, rst[31].toInt()) // ack = seq + 1
+        assertEquals(0x14, rst[33].toInt()) // RST|ACK
+        assertNull(IpPackets.tcpResetFor(rst, 40)) // RST에는 응답 안 함
     }
 }
