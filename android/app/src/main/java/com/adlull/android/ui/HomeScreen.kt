@@ -21,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.adlull.android.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,7 +85,7 @@ fun HomeScreen(modifier: Modifier, onStart: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.size(130.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Shield, null, tint = Color.White, modifier = Modifier.size(64.dp))
+                Icon(painterResource(R.drawable.ic_moon), null, tint = Color.White, modifier = Modifier.size(72.dp))
             }
         }
         Text(
@@ -92,7 +93,7 @@ fun HomeScreen(modifier: Modifier, onStart: () -> Unit) {
             fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color,
         )
         Text(
-            if (running) "모든 앱의 광고·추적기를 차단하고 있어요" else "방패를 눌러 광고 차단을 시작하세요",
+            if (running) "모든 앱의 광고·추적기를 차단하고 있어요" else "가운데 버튼을 눌러 광고 차단을 시작하세요",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 

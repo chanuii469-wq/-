@@ -263,7 +263,7 @@ class AdBlockVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_shield)
+            .setSmallIcon(R.drawable.ic_moon)
             .setContentTitle("광고 차단 중")
             .setContentText("지금까지 ${"%,d".format(Stats.totalBlocked.value)}개 차단")
             .setContentIntent(mainIntent())

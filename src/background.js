@@ -70,7 +70,7 @@ async function applySettings() {
   await chrome.declarativeNetRequest.setExtensionActionOptions({
     displayActionCountAsBadgeText: s.enabled,
   });
-  await chrome.action.setBadgeBackgroundColor({ color: "#2e7d32" });
+  await chrome.action.setBadgeBackgroundColor({ color: "#4338ca" });
   await chrome.action.setTitle({ title: s.enabled ? "Adlull (켜짐)" : "Adlull (꺼짐)" });
 }
 

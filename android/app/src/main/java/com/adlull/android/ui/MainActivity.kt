@@ -17,7 +17,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab(val label: String, val icon: ImageVector) {
-    HOME("보호", Icons.Filled.Shield),
+    HOME("보호", Icons.Filled.Bedtime),
     LOG("기록", Icons.Filled.History),
     FILTERS("필터", Icons.Filled.FilterList),
     APPS("앱", Icons.Filled.Apps),
@@ -112,7 +112,7 @@ private fun AppRoot(onStart: () -> Unit) {
     }
 }
 
-val Brand = Color(0xFF2E7D32)
+val Brand = Color(0xFF4338CA)
 
 @Composable
 fun AdlullTheme(content: @Composable () -> Unit) {
@@ -120,7 +120,7 @@ fun AdlullTheme(content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val scheme = when {
         Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dark -> darkColorScheme(primary = Color(0xFF81C784), secondary = Color(0xFF81C784))
+        dark -> darkColorScheme(primary = Color(0xFFA5B4FC), secondary = Color(0xFFA5B4FC))
         else -> lightColorScheme(primary = Brand, secondary = Brand)
     }
     MaterialTheme(colorScheme = scheme, content = content)
