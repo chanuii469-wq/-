@@ -198,7 +198,13 @@ class FilterAndDnsTest {
         val hit = cache.get(q2, parsed, "s", now = 5_000)!!
         assertEquals(0x55.toByte(), hit[0]); assertEquals(0x66.toByte(), hit[1])
         assertNull(cache.get(q2, parsed, "other", now = 5_000))
-        assertNull(cache.get(q2, parsed, "s", now = 11_000))
+        // TTL을 남은 시간(5초)으로 고쳐 씀
+        assertEquals(5, hit[hit.size - 7].toInt())
+        // 만료 후에도 하루 동안은 TTL 10초로 바로 응답하고 갱신 필요로 표시 (낙관적 캐시)
+        val stale = cache.lookup(q2, parsed, "s", now = 11_000)!!
+        assertTrue(stale.stale)
+        assertEquals(10, stale.response[stale.response.size - 7].toInt())
+        assertNull(cache.get(q2, parsed, "s", now = 11_000 + 25 * 3600 * 1000L))
     }
 
     /** 30만 도메인 컴파일 시간·조회 속도 확인 (실패 기준은 넉넉하게) */
@@ -280,7 +286,7 @@ class FilterAndDnsTest {
                 assertNotNull(r)
                 assertEquals(good.localPort.let { lo }, r!!.first)
                 assertEquals(q[0], r.second[0]); assertEquals(0x81.toByte(), r.second[2])
-                assertTrue("took ${ms}ms", ms in 350..1500)
+                assertTrue("took ${ms}ms", ms in 100..1500)
             }
         }
     }

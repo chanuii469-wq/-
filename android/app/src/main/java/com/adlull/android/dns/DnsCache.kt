@@ -1,15 +1,17 @@
 package com.adlull.android.dns
 
 /**
- * 업스트림 DNS 응답 캐시 (LRU + TTL).
- * 같은 도메인을 반복 조회할 때 네트워크 왕복 없이 바로 응답해 지연과 배터리를 줄인다.
+ * 업스트림 DNS 응답 캐시 (LRU + TTL + 낙관적 캐시).
+ * - 같은 도메인을 반복 조회하면 네트워크 왕복 없이 바로 응답
+ * - 만료된 항목도 하루 동안은 일단 바로 돌려주고(TTL 10초) 뒤에서 새로 받아 옴 (낙관적 캐시)
+ * - 돌려줄 때 TTL을 남은 시간으로 고쳐 써서 앱이 너무 오래 캐시하지 않게 함
  */
-class DnsCache(private val maxEntries: Int = 2048) {
+class DnsCache(private val maxEntries: Int = 8192) {
     private class Entry(val response: ByteArray, val expiresAt: Long, val ttlMs: Long) {
         var hits = 0
     }
 
-    /** stale=true면 곧 만료되는 인기 항목이라 미리 갱신하는 게 좋음 */
+    /** stale=true면 만료됐거나 곧 만료되므로 뒤에서 새로 받아 오는 게 좋음 */
     class Hit(val response: ByteArray, val stale: Boolean)
 
     private val map = object : LinkedHashMap<String, Entry>(256, 0.75f, true) {
@@ -24,16 +26,21 @@ class DnsCache(private val maxEntries: Int = 2048) {
     fun lookup(query: ByteArray, q: DnsQuery, scope: String, now: Long = System.currentTimeMillis()): Hit? {
         val k = key(q, scope)
         val e = map[k]
-        if (e == null || e.expiresAt <= now) {
+        if (e == null || now - e.expiresAt > STALE_MS) {
             if (e != null) map.remove(k)
             misses++
             return null
         }
         hits++
         e.hits++
+        val remainingMs = e.expiresAt - now
+        if (remainingMs <= 0) {
+            // 만료됐지만 낙관적으로 일단 응답
+            return Hit(withTtl(withId(e.response, query), STALE_TTL), stale = true)
+        }
         // 두 번 이상 쓰였고 남은 시간이 TTL의 10% 미만이면 미리 갱신 대상
-        val stale = e.hits >= 2 && e.expiresAt - now < e.ttlMs / 10
-        return Hit(withId(e.response, query), stale)
+        val stale = e.hits >= 2 && remainingMs < e.ttlMs / 10
+        return Hit(withTtl(withId(e.response, query), maxOf(1L, remainingMs / 1000)), stale)
     }
 
     fun get(query: ByteArray, q: DnsQuery, scope: String, now: Long = System.currentTimeMillis()): ByteArray? =
@@ -51,6 +58,27 @@ class DnsCache(private val maxEntries: Int = 2048) {
 
     companion object {
         private const val MAX_TTL = 3600L
+        private const val STALE_MS = 24 * 3600 * 1000L
+        private const val STALE_TTL = 10L
+        private const val TYPE_OPT = 41
+
+        /** 답변·권한·추가 레코드의 TTL을 ttl로 바꿈 (EDNS OPT 레코드는 제외) */
+        fun withTtl(msg: ByteArray, ttl: Long): ByteArray {
+            if (msg.size < 12) return msg
+            val qd = u16(msg, 4); val rr = u16(msg, 6) + u16(msg, 8) + u16(msg, 10)
+            var pos = 12
+            repeat(qd) { pos = skipName(msg, pos) + 4; if (pos > msg.size) return msg }
+            repeat(rr) {
+                pos = skipName(msg, pos)
+                if (pos + 10 > msg.size) return msg
+                if (u16(msg, pos) != TYPE_OPT) {
+                    msg[pos + 4] = (ttl shr 24).toByte(); msg[pos + 5] = (ttl shr 16).toByte()
+                    msg[pos + 6] = (ttl shr 8).toByte(); msg[pos + 7] = ttl.toByte()
+                }
+                pos += 10 + u16(msg, pos + 8)
+            }
+            return msg
+        }
 
         fun key(q: DnsQuery, scope: String) = "$scope|${q.qtype}|${q.name}"
 

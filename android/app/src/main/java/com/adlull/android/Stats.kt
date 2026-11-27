@@ -2,6 +2,7 @@ package com.adlull.android
 
 import com.adlull.android.filter.Blocklist
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +55,21 @@ object Stats {
     private var topDirty = false
     private var unsaved = 0
 
+    // DNS 응답 시간 (업스트림까지 다녀온 요청만) / 캐시 적중
+    private var avgUpstreamMs = -1.0
+    private var cacheHits = 0L
+    private var resolved = 0L
+    private val _dnsInfo = MutableStateFlow<String?>(null)
+    /** 홈 화면 표시용: "DNS 평균 23ms · 캐시 41%" */
+    val dnsInfo: StateFlow<String?> = _dnsInfo
+
+    @Synchronized
+    fun recordResolve(ms: Long, fromCache: Boolean) {
+        resolved++
+        if (fromCache) cacheHits++
+        else avgUpstreamMs = if (avgUpstreamMs < 0) ms.toDouble() else avgUpstreamMs * 0.9 + ms * 0.1
+    }
+
     fun load() {
         queries = Prefs.totalQueries
         blocked = Prefs.totalBlocked
@@ -61,9 +77,12 @@ object Stats {
         _totalBlocked.value = blocked
     }
 
-    /** 주기적으로 UI 상태를 갱신 (앱 시작 시 한 번 호출) */
+    // 기록이 생겼을 때만 깨어나 0.5초 뒤 한 번에 내보냄. 아무 요청이 없으면 전혀 깨어나지 않음
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+
+    /** UI 상태 갱신 작업 시작 (앱 시작 시 한 번 호출) */
     fun startPublisher(scope: CoroutineScope) = scope.launch {
-        while (true) {
+        for (u in wake) {
             delay(PUBLISH_MS)
             publish()
         }
@@ -76,6 +95,10 @@ object Stats {
         if (logDirty) {
             _log.value = logBuf.toList()
             logDirty = false
+        }
+        if (resolved > 0) {
+            val avg = if (avgUpstreamMs < 0) "–" else "${avgUpstreamMs.toInt()}ms"
+            _dnsInfo.value = "DNS 평균 응답 $avg · 캐시 적중 ${cacheHits * 100 / resolved}%"
         }
         if (topDirty) {
             _topDomains.value = top(domainCounts)
@@ -106,6 +129,7 @@ object Stats {
             logDirty = true
         }
         if (++unsaved >= 500) save()
+        wake.trySend(Unit)
     }
 
     /** 앱별 (전체 요청, 차단) 수 — 이번 실행 기준 */

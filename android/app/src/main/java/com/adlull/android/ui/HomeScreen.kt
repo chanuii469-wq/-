@@ -60,6 +60,7 @@ fun HomeScreen(modifier: Modifier, onStart: () -> Unit) {
     val topDomains by Stats.topDomains.collectAsStateWithLifecycle()
     val topApps by Stats.topApps.collectAsStateWithLifecycle()
     val rules by FilterManager.ruleCount.collectAsStateWithLifecycle()
+    val dnsInfo by Stats.dnsInfo.collectAsStateWithLifecycle()
 
     var privateDns by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(running) {
@@ -127,7 +128,8 @@ fun HomeScreen(modifier: Modifier, onStart: () -> Unit) {
             )
         }
         Text(
-            "차단 규칙 %,d개 사용 중".format(rules),
+            "차단 규칙 %,d개 사용 중".format(rules) + (dnsInfo?.let { "\n$it" } ?: ""),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

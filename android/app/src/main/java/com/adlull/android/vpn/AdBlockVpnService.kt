@@ -67,7 +67,7 @@ class AdBlockVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
     private var reader: Thread? = null
     private var out: FileOutputStream? = null
-    private lateinit var pool: ExecutorService
+    private lateinit var pool: ThreadPoolExecutor
     private lateinit var upstream: Upstream
     private lateinit var resolver: Resolver
     private class Owner(val pkg: String?, val label: String)
@@ -96,7 +96,10 @@ class AdBlockVpnService : VpnService() {
                 startVpn()
             }
             // ACTION_START, 또는 시스템의 '상시 VPN'이 시작한 경우
-            else -> startVpn()
+            else -> {
+                restarts = 0
+                startVpn()
+            }
         }
         return START_STICKY
     }
@@ -110,6 +113,7 @@ class AdBlockVpnService : VpnService() {
 
     override fun onDestroy() {
         stopVpn()
+        upstream.close()
         pool.shutdownNow()
         super.onDestroy()
     }
@@ -166,13 +170,25 @@ class AdBlockVpnService : VpnService() {
         QuickTileService.refresh(this)
     }
 
+    /**
+     * 터널에서 패킷을 읽는 루프.
+     * 주의: read()가 -1(스트림 끝)을 돌려주면 다음 read()도 즉시 -1을 돌려주므로
+     * 그냥 continue하면 CPU를 100% 쓰며 헛도는 문제가 생긴다(발열 원인).
+     * 끝이면 루프를 빠져나와 VPN을 다시 연결하고, 0이면 잠깐 쉰다.
+     */
     private fun readLoop(pfd: ParcelFileDescriptor) {
         val input = FileInputStream(pfd.fileDescriptor)
         val buf = ByteArray(32767)
+        var empty = 0
         try {
             while (!Thread.currentThread().isInterrupted) {
                 val n = input.read(buf)
-                if (n <= 0) continue
+                if (n < 0) break
+                if (n == 0) {
+                    if (++empty > 3) Thread.sleep(20)
+                    continue
+                }
+                empty = 0
                 val pkt = IpPackets.parseUdp(buf, n)
                 if (pkt == null) {
                     IpPackets.tcpResetFor(buf, n)?.let { write(it) }
@@ -188,16 +204,34 @@ class AdBlockVpnService : VpnService() {
         } catch (e: Exception) {
             // tun이 닫히면 여기로 옴
         }
+        // 직접 끈 게 아닌데 터널이 끊겼으면(네트워크 전환 등) 잠시 뒤 다시 연결
+        if (!Thread.currentThread().isInterrupted && tun === pfd) {
+            mainHandler.postDelayed({
+                if (tun === pfd && restarts++ < 5) {
+                    Log.w(TAG, "tunnel ended, reconnecting")
+                    stopVpn()
+                    startVpn()
+                }
+            }, 1000)
+        }
     }
+
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var restarts = 0
 
     private fun handleDns(pkt: UdpPacket) {
         val query = DnsPackets.parse(pkt.payload) ?: return
         val mask = Stats.blocklist.match(query.name)
-        // 차단 후보이거나 기록이 켜져 있을 때만 요청한 앱을 조회 (binder 호출 비용 절약)
         val hot = Prefs.hot
-        // 차단 후보일 때만 응답 전에 요청한 앱을 조회 (앱별 설정을 적용해야 하므로).
-        // 일반 요청은 응답을 먼저 받아 온 뒤 기록용으로만 조회해 지연을 늘리지 않음
-        var owner = if (mask != 0) ownerApp(pkt) else null
+        // 요청한 앱 조회는 시스템 호출이라 느릴 수 있음.
+        // 차단 여부가 앱별 설정에 달린 경우에만 응답 전에 기다리고,
+        // 나머지는 업스트림 질의와 동시에 진행해 응답 시간에 더해지지 않게 함
+        val needOwnerFirst = mask != 0 && AppRules.rules.value.isNotEmpty()
+        val needOwner = mask != 0 || hot.logQueries
+        var owner = if (needOwnerFirst) ownerApp(pkt) else null
+        val ownerFuture = if (!needOwnerFirst && needOwner) {
+            try { pool.submit<Owner?> { ownerApp(pkt) } } catch (_: RejectedExecutionException) { null }
+        } else null
         val rule = owner?.pkg?.let { AppRules[it] } ?: AppRule()
         val blocked = (mask and (Blocklist.ADS or Blocklist.USER) != 0 && rule.ads) ||
             (mask and Blocklist.TRACKERS != 0 && rule.trackers)
@@ -207,9 +241,11 @@ class AdBlockVpnService : VpnService() {
         } else {
             resolver.resolve(pkt.payload, query) ?: return
         }
-        if (owner == null && hot.logQueries) owner = ownerApp(pkt)
-        val logIt = owner?.pkg?.let { AppRules[it].log } ?: true
         write(IpPackets.buildUdp(pkt.dstIp, pkt.srcIp, pkt.dstPort, pkt.srcPort, response))
+        if (owner == null && ownerFuture != null) {
+            owner = runCatching { ownerFuture.get(300, TimeUnit.MILLISECONDS) }.getOrNull()
+        }
+        val logIt = owner?.pkg?.let { AppRules[it].log } ?: true
         Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, logIt)
         if (blocked) updateNotification()
     }
@@ -289,7 +325,7 @@ class AdBlockVpnService : VpnService() {
 
     private fun updateNotification() {
         val now = System.currentTimeMillis()
-        if (now - lastNotify < 3000) return
+        if (now - lastNotify < 10_000) return // 알림 갱신은 10초에 한 번만
         lastNotify = now
         try {
             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification())

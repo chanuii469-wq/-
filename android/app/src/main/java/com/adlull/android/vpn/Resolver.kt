@@ -35,6 +35,7 @@ class Resolver(
         val sc = scope()
         cache.lookup(query, q, sc)?.let { hit ->
             if (hit.stale) prefetch(query, q, sc)
+            com.adlull.android.Stats.recordResolve(0, fromCache = true)
             return hit.response
         }
         val key = DnsCache.key(q, sc)
@@ -46,7 +47,9 @@ class Resolver(
             return other.result?.let { DnsCache.withId(it, query) }
         }
         try {
+            val t0 = System.nanoTime()
             val r = resolveUpstream(query)
+            if (r != null) com.adlull.android.Stats.recordResolve((System.nanoTime() - t0) / 1_000_000, fromCache = false)
             if (r != null) cache.put(q, r, sc)
             mine.result = r
             return r

@@ -2,6 +2,8 @@ package com.adlull.android.vpn
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
 import android.net.NetworkCapabilities
 import com.adlull.android.Prefs
 import com.adlull.android.UpstreamDns
@@ -24,7 +26,7 @@ import java.util.concurrent.TimeUnit
  *
  * 속도를 위해:
  * - 이 앱은 VPN에서 제외돼 있으므로 소켓마다 protect()(시스템 호출) 하지 않음
- * - UDP는 첫 서버가 0.4초 안에 답이 없으면 다음 서버에도 동시에 보내 먼저 온 답을 씀
+ * - UDP는 첫 서버가 0.15초 안에 답이 없으면 다음 서버에도 동시에 보내 먼저 온 답을 씀
  * - DoH는 동시 연결 수를 제한해 HTTPS 연결을 재사용(요청마다 TLS 핸드셰이크 방지)하고,
  *   실패하면 1분간 DoH를 쉬고 바로 UDP로 처리 (매 요청 타임아웃 대기 방지)
  */
@@ -107,17 +109,44 @@ class Upstream(context: Context) {
         }
     }
 
-    /** VPN이 아닌 실제 네트워크(와이파이/모바일)의 DNS 서버 */
+    // 와이파이↔모바일 전환 시 DNS 서버 목록을 바로 다시 읽음
+    private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) { sysDnsAt = 0 }
+        override fun onLost(network: Network) { sysDnsAt = 0 }
+        override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) { sysDnsAt = 0 }
+    }
+
+    init {
+        runCatching { cm.registerDefaultNetworkCallback(netCallback) }
+    }
+
+    fun close() {
+        runCatching { cm.unregisterNetworkCallback(netCallback) }
+    }
+
+    /**
+     * 지금 실제로 쓰는 네트워크(와이파이 또는 모바일)의 DNS 서버.
+     * 이 앱은 VPN에서 제외돼 있어 activeNetwork가 곧 실제 네트워크다.
+     * (예전처럼 모든 네트워크의 DNS를 합치면, 와이파이 사용 중에 닿지 않는 모바일 DNS가
+     *  앞에 오는 경우 요청마다 기다리는 문제가 있었음)
+     */
     @Suppress("DEPRECATION")
     private fun systemDns(): List<InetAddress> {
         val now = System.currentTimeMillis()
-        if (now - sysDnsAt < 30_000 && sysDns.isNotEmpty()) return sysDns
-        val list = cm.allNetworks.flatMap { n ->
+        if (now - sysDnsAt < 60_000 && sysDns.isNotEmpty()) return sysDns
+        var list = cm.activeNetwork?.let { n ->
             val caps = cm.getNetworkCapabilities(n)
-            if (caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-            ) cm.getLinkProperties(n)?.dnsServers.orEmpty() else emptyList()
-        }.distinct()
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) null
+            else cm.getLinkProperties(n)?.dnsServers
+        }.orEmpty()
+        if (list.isEmpty()) {
+            list = cm.allNetworks.firstNotNullOfOrNull { n ->
+                val caps = cm.getNetworkCapabilities(n)
+                if (caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
+                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                ) cm.getLinkProperties(n)?.dnsServers?.takeIf { it.isNotEmpty() } else null
+            }.orEmpty()
+        }
         sysDns = list.ifEmpty { UpstreamDns.CLOUDFLARE.addresses }
         sysDnsAt = now
         return sysDns
@@ -168,7 +197,7 @@ class Upstream(context: Context) {
             }
         }
 
-        private const val HEDGE_MS = 400L
+        private const val HEDGE_MS = 150L
         private const val UDP_TOTAL_MS = 3000L
         private const val DOH_CONNECTIONS = 4
         private const val DOH_WAIT_MS = 1500L
