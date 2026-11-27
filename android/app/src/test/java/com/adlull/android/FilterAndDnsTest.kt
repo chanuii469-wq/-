@@ -12,16 +12,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import com.adlull.android.dns.DnsCache
-import com.adlull.android.vpn.Resolver
-import com.adlull.android.vpn.Upstream
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -204,7 +194,7 @@ class FilterAndDnsTest {
         val stale = cache.lookup(q2, parsed, "s", now = 11_000)!!
         assertTrue(stale.stale)
         assertEquals(10, stale.response[stale.response.size - 7].toInt())
-        assertNull(cache.get(q2, parsed, "s", now = 11_000 + 25 * 3600 * 1000L))
+        assertNull(cache.get(q2, parsed, "s", now = 11_000 + 2 * 3600 * 1000L))
     }
 
     /** 30만 도메인 컴파일 시간·조회 속도 확인 (실패 기준은 넉넉하게) */
@@ -225,30 +215,6 @@ class FilterAndDnsTest {
         assertTrue(compileMs < 20_000)
     }
 
-    @Test fun resolverCoalescesConcurrentQueries() {
-        val calls = AtomicInteger()
-        val gate = CountDownLatch(1)
-        val q = dnsQuery("same.com", 1)
-        val parsed = DnsPackets.parse(q)!!
-        val pool = Executors.newCachedThreadPool()
-        val r = Resolver({ calls.incrementAndGet(); gate.await(2, TimeUnit.SECONDS); answer(it, 300) }, { "s" }, pool)
-        val futures = (0 until 5).map { i ->
-            pool.submit<ByteArray?> {
-                val qi = q.copyOf(); qi[1] = i.toByte()
-                r.resolve(qi, parsed)
-            }
-        }
-        Thread.sleep(200)
-        gate.countDown()
-        val results = futures.map { it.get(3, TimeUnit.SECONDS)!! }
-        assertEquals(1, calls.get())
-        results.forEachIndexed { i, res -> assertEquals(i.toByte(), res[1]) } // 각자 자기 ID로 응답
-        // 이후 요청은 캐시에서
-        r.resolve(q, parsed)
-        assertEquals(1, calls.get())
-        pool.shutdown()
-    }
-
     @Test fun tcpSynGetsReset() {
         val syn = ByteArray(40)
         syn[0] = 0x45; syn[3] = 40; syn[9] = 6
@@ -263,40 +229,5 @@ class FilterAndDnsTest {
         assertEquals(10, rst[31].toInt()) // ack = seq + 1
         assertEquals(0x14, rst[33].toInt()) // RST|ACK
         assertNull(IpPackets.tcpResetFor(rst, 40)) // RST에는 응답 안 함
-    }
-
-    /** 첫 서버가 응답하지 않으면 0.4초 뒤 다음 서버에 보내 그 응답을 사용 */
-    @Test fun hedgedUdpFallsThroughToSecondServer() {
-        val lo = InetAddress.getLoopbackAddress()
-        DatagramSocket(0, lo).use { silent ->
-            DatagramSocket(0, lo).use { good ->
-                val q = dnsQuery("a.com", 1)
-                val t = Thread {
-                    val buf = ByteArray(512); val p = DatagramPacket(buf, buf.size)
-                    good.receive(p)
-                    val ans = answer(buf.copyOf(p.length), 60)
-                    good.send(DatagramPacket(ans, ans.size, p.socketAddress))
-                }.apply { start() }
-                val t0 = System.currentTimeMillis()
-                val r = Upstream.hedgedUdp(
-                    listOf(InetSocketAddress(lo, silent.localPort), InetSocketAddress(lo, good.localPort)), q,
-                )
-                val ms = System.currentTimeMillis() - t0
-                t.join(2000)
-                assertNotNull(r)
-                assertEquals(good.localPort.let { lo }, r!!.first)
-                assertEquals(q[0], r.second[0]); assertEquals(0x81.toByte(), r.second[2])
-                assertTrue("took ${ms}ms", ms in 100..1500)
-            }
-        }
-    }
-
-    @Test fun hedgedUdpGivesUpAtDeadline() {
-        val lo = InetAddress.getLoopbackAddress()
-        DatagramSocket(0, lo).use { silent ->
-            val t0 = System.currentTimeMillis()
-            assertNull(Upstream.hedgedUdp(listOf(InetSocketAddress(lo, silent.localPort)), dnsQuery("a.com", 1), totalMs = 600))
-            assertTrue(System.currentTimeMillis() - t0 < 1500)
-        }
     }
 }

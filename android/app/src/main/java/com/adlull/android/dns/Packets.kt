@@ -105,9 +105,18 @@ object DnsPackets {
     const val TYPE_A = 1
     const val TYPE_AAAA = 28
 
+    const val RCODE_SERVFAIL = 2
+
+    /** 질의 패킷의 질문을 해석 (응답 패킷이면 null) */
     fun parse(msg: ByteArray): DnsQuery? {
         if (msg.size < 12) return null
         if (msg[2].toInt() and 0x80 != 0) return null // 응답 패킷
+        return question(msg)
+    }
+
+    /** 질의·응답 구분 없이 첫 질문을 해석 */
+    fun question(msg: ByteArray): DnsQuery? {
+        if (msg.size < 12) return null
         val qd = ((msg[4].toInt() and 0xFF) shl 8) or (msg[5].toInt() and 0xFF)
         if (qd < 1) return null
         val sb = StringBuilder()
@@ -116,7 +125,7 @@ object DnsPackets {
             if (pos >= msg.size) return null
             val l = msg[pos].toInt() and 0xFF
             if (l == 0) { pos++; break }
-            if (l and 0xC0 != 0 || pos + 1 + l > msg.size) return null
+            if (l and 0xC0 != 0 || pos + 1 + l > msg.size || sb.length > 255) return null
             if (sb.isNotEmpty()) sb.append('.')
             for (i in pos + 1..pos + l) sb.append((msg[i].toInt() and 0xFF).toChar())
             pos += l + 1
@@ -124,6 +133,16 @@ object DnsPackets {
         if (pos + 4 > msg.size) return null
         val qtype = ((msg[pos].toInt() and 0xFF) shl 8) or (msg[pos + 1].toInt() and 0xFF)
         return DnsQuery(sb.toString().lowercase(), qtype, pos + 4)
+    }
+
+    /** 오류 응답 (예: SERVFAIL). 질문만 담아 바로 돌려줘 앱이 오래 기다리지 않게 함 */
+    fun errorResponse(query: ByteArray, q: DnsQuery, rcode: Int): ByteArray {
+        val out = query.copyOf(q.questionEnd)
+        out[2] = (0x80 or (query[2].toInt() and 0x01)).toByte() // QR + RD 유지
+        out[3] = (0x80 or (rcode and 0x0F)).toByte() // RA + RCODE
+        out[4] = 0; out[5] = 1
+        for (i in 6 until 12) out[i] = 0
+        return out
     }
 
     /** 차단 응답: A → 0.0.0.0, AAAA → ::, 그 외 → 빈 응답. nxdomain=true면 NXDOMAIN */

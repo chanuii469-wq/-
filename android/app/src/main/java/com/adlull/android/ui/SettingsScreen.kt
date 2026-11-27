@@ -37,11 +37,17 @@ import com.adlull.android.filter.FilterUpdateWorker
 fun SettingsScreen(modifier: Modifier) {
     val ctx = LocalContext.current
     // Prefs 변경 시 다시 그리기
-    @Suppress("UNUSED_VARIABLE")
-    val v by Prefs.version.collectAsStateWithLifecycle()
+    // .value를 직접 읽어야 설정이 바뀔 때 화면이 즉시 다시 그려짐
+    // (예전엔 위임만 하고 읽지 않아 탭을 바꿨다 와야 반영되던 버그)
+    Prefs.version.collectAsStateWithLifecycle().value
     var confirmReset by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
     var showPrivacy by remember { mutableStateOf(false) }
+    var showDiag by remember { mutableStateOf(false) }
+    if (showDiag) {
+        DiagnosticsScreen(modifier) { showDiag = false }
+        return
+    }
     if (showLicenses) {
         LicensesScreen(modifier) { showLicenses = false }
         return
@@ -91,6 +97,10 @@ fun SettingsScreen(modifier: Modifier) {
         HorizontalDivider()
         Header("통계")
         ClickRow("통계 초기화", "차단 수와 기록을 모두 지워요") { confirmReset = true }
+
+        HorizontalDivider()
+        Header("문제 해결")
+        ClickRow("상태 진단", "느리거나 휴대폰이 뜨거울 때 원인을 확인해요") { showDiag = true }
 
         HorizontalDivider()
         Header("정보")

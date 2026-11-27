@@ -192,7 +192,7 @@ private fun AppDetail(
 ) {
     BackHandler(onBack = onBack)
     val log by Stats.log.collectAsStateWithLifecycle()
-    @Suppress("UNUSED_VARIABLE") val tick by Stats.totalQueries.collectAsStateWithLifecycle()
+    Stats.totalQueries.collectAsStateWithLifecycle().value // 숫자 갱신용 구독
     val (queries, blocked) = Stats.countsFor(app.pkg)
     val recent = log.filter { it.pkg == app.pkg }.take(30)
     val fmt = remember { SimpleDateFormat("HH:mm:ss", Locale.KOREA) }

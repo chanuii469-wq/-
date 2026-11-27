@@ -19,11 +19,13 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.adlull.android.AppRule
 import com.adlull.android.AppRules
+import com.adlull.android.Diagnostics
 import com.adlull.android.Prefs
 import com.adlull.android.R
 import com.adlull.android.Stats
-import com.adlull.android.dns.DnsPackets
-import com.adlull.android.dns.IpPackets
+import com.adlull.android.dns.AppOwner
+import com.adlull.android.dns.DnsCache
+import com.adlull.android.dns.DnsEngine
 import com.adlull.android.dns.UdpPacket
 import com.adlull.android.filter.Blocklist
 import com.adlull.android.ui.MainActivity
@@ -32,15 +34,11 @@ import java.io.FileOutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.SynchronousQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
 
 /**
  * 로컬 VPN으로 기기의 DNS 질의만 가로채서 광고 도메인을 차단한다.
  * 가상 DNS 서버(10.111.222.1)로 가는 경로만 터널에 넣으므로 일반 트래픽은 그대로 통과한다.
+ * DNS 처리 자체는 DnsEngine이 맡고, 이 서비스는 VPN 연결·알림·앱 조회만 담당한다.
  */
 class AdBlockVpnService : VpnService() {
 
@@ -58,28 +56,59 @@ class AdBlockVpnService : VpnService() {
         fun stop(ctx: Context) = send(ctx, ACTION_STOP)
         fun restartIfRunning(ctx: Context) { if (Stats.running.value) send(ctx, ACTION_RESTART) }
 
+        /** VPN을 다시 연결해도 DNS 캐시는 유지 */
+        private val sharedCache = DnsCache()
+
         private fun send(ctx: Context, action: String) {
             val i = Intent(ctx, AdBlockVpnService::class.java).setAction(action)
             if (action == ACTION_STOP) ctx.startService(i) else ContextCompat.startForegroundService(ctx, i)
         }
     }
 
-    private var tun: ParcelFileDescriptor? = null
+    @Volatile private var tun: ParcelFileDescriptor? = null
     private var reader: Thread? = null
-    private var out: FileOutputStream? = null
-    private lateinit var pool: ThreadPoolExecutor
+    @Volatile private var out: FileOutputStream? = null
     private lateinit var upstream: Upstream
-    private lateinit var resolver: Resolver
-    private class Owner(val pkg: String?, val label: String)
-    private val owners = ConcurrentHashMap<Int, Owner>()
-    private var lastNotify = 0L
+    private lateinit var engine: DnsEngine
+    private val owners = ConcurrentHashMap<Int, AppOwner>()
+    @Volatile private var lastNotify = 0L
 
     override fun onCreate() {
         super.onCreate()
-        // 평소엔 스레드 4개, 느린 업스트림이 몰리면 최대 64개까지. 그 이상은 버림(앱이 재시도함)
-        upstream = Upstream(this)
-        pool = ThreadPoolExecutor(8, 64, 30, TimeUnit.SECONDS, SynchronousQueue())
-        resolver = Resolver(upstream::resolve, upstream::scope, pool)
+        engine = DnsEngine(EngineHost(), cache = sharedCache)
+        upstream = Upstream(this) { if (::engine.isInitialized) engine.requestRebind() }
+        engine.start()
+        Diagnostics.poolInfo = {
+            "대기 중 질의 ${engine.pendingCount()}개 · 앱 조회 ${engine.ownerLookups}회 · SERVFAIL ${engine.servfails}회"
+        }
+    }
+
+    /** 엔진이 VPN·설정·통계에 접근하는 통로 */
+    private inner class EngineHost : DnsEngine.Host {
+        override fun writeToTun(packet: ByteArray) = write(packet)
+        override fun match(name: String) = Stats.blocklist.match(name)
+        override fun appRulesActive() = AppRules.rules.value.isNotEmpty()
+        override fun isBlocked(mask: Int, owner: AppOwner?): Boolean {
+            val rule = owner?.pkg?.let { AppRules[it] } ?: AppRule()
+            return (mask and (Blocklist.ADS or Blocklist.USER) != 0 && rule.ads) ||
+                (mask and Blocklist.TRACKERS != 0 && rule.trackers)
+        }
+        override fun nxdomain() = Prefs.hot.nxdomain
+        override fun logEnabled() = Prefs.hot.logQueries
+        override fun lookupOwner(packet: UdpPacket) = ownerApp(packet)
+        override fun record(name: String, qtype: Int, blocked: Boolean, owner: AppOwner?) {
+            val log = owner?.pkg?.let { AppRules[it].log } ?: true
+            Stats.record(name, qtype, blocked, owner?.label, owner?.pkg, log)
+            if (blocked) updateNotification()
+        }
+        override fun servers(): List<InetSocketAddress> = upstream.servers()
+        override fun cacheScope() = upstream.scope()
+        override fun dohUrl() = upstream.dohUrl()
+        override fun onResolved(ms: Long, fromCache: Boolean) {
+            Stats.recordResolve(ms, fromCache)
+            if (!fromCache) Diagnostics.latency(ms)
+        }
+        override fun onFailure() = Diagnostics.failure()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -113,8 +142,8 @@ class AdBlockVpnService : VpnService() {
 
     override fun onDestroy() {
         stopVpn()
+        engine.stop()
         upstream.close()
-        pool.shutdownNow()
         super.onDestroy()
     }
 
@@ -155,11 +184,11 @@ class AdBlockVpnService : VpnService() {
         Stats.running.value = true
         Prefs.wasRunning = true
         reader = Thread({ readLoop(pfd) }, "vpn-reader").also { it.start() }
+        Diagnostics.vpnStarts++
         QuickTileService.refresh(this)
     }
 
     private fun stopVpn() {
-        if (::resolver.isInitialized) resolver.clear()
         reader?.interrupt()
         reader = null
         runCatching { tun?.close() }
@@ -189,26 +218,18 @@ class AdBlockVpnService : VpnService() {
                     continue
                 }
                 empty = 0
-                val pkt = IpPackets.parseUdp(buf, n)
-                if (pkt == null) {
-                    IpPackets.tcpResetFor(buf, n)?.let { write(it) }
-                    continue
-                }
-                if (pkt.dstPort != 53) continue
-                try {
-                    pool.execute { handleDns(pkt) }
-                } catch (_: RejectedExecutionException) {
-                    // 너무 몰리면 버림 (앱이 재시도함)
-                }
+                engine.onPacket(buf, n)
             }
         } catch (e: Exception) {
             // tun이 닫히면 여기로 옴
         }
         // 직접 끈 게 아닌데 터널이 끊겼으면(네트워크 전환 등) 잠시 뒤 다시 연결
         if (!Thread.currentThread().isInterrupted && tun === pfd) {
+            Diagnostics.tunnelEnds++
             mainHandler.postDelayed({
                 if (tun === pfd && restarts++ < 5) {
                     Log.w(TAG, "tunnel ended, reconnecting")
+                    Diagnostics.autoReconnects++
                     stopVpn()
                     startVpn()
                 }
@@ -219,37 +240,6 @@ class AdBlockVpnService : VpnService() {
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var restarts = 0
 
-    private fun handleDns(pkt: UdpPacket) {
-        val query = DnsPackets.parse(pkt.payload) ?: return
-        val mask = Stats.blocklist.match(query.name)
-        val hot = Prefs.hot
-        // 요청한 앱 조회는 시스템 호출이라 느릴 수 있음.
-        // 차단 여부가 앱별 설정에 달린 경우에만 응답 전에 기다리고,
-        // 나머지는 업스트림 질의와 동시에 진행해 응답 시간에 더해지지 않게 함
-        val needOwnerFirst = mask != 0 && AppRules.rules.value.isNotEmpty()
-        val needOwner = mask != 0 || hot.logQueries
-        var owner = if (needOwnerFirst) ownerApp(pkt) else null
-        val ownerFuture = if (!needOwnerFirst && needOwner) {
-            try { pool.submit<Owner?> { ownerApp(pkt) } } catch (_: RejectedExecutionException) { null }
-        } else null
-        val rule = owner?.pkg?.let { AppRules[it] } ?: AppRule()
-        val blocked = (mask and (Blocklist.ADS or Blocklist.USER) != 0 && rule.ads) ||
-            (mask and Blocklist.TRACKERS != 0 && rule.trackers)
-
-        val response = if (blocked) {
-            DnsPackets.blockedResponse(pkt.payload, query, hot.nxdomain)
-        } else {
-            resolver.resolve(pkt.payload, query) ?: return
-        }
-        write(IpPackets.buildUdp(pkt.dstIp, pkt.srcIp, pkt.dstPort, pkt.srcPort, response))
-        if (owner == null && ownerFuture != null) {
-            owner = runCatching { ownerFuture.get(300, TimeUnit.MILLISECONDS) }.getOrNull()
-        }
-        val logIt = owner?.pkg?.let { AppRules[it].log } ?: true
-        Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, logIt)
-        if (blocked) updateNotification()
-    }
-
     private fun write(packet: ByteArray) {
         val o = out ?: return
         try {
@@ -259,7 +249,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     /** 어떤 앱이 요청했는지 (Android 10 이상) */
-    private fun ownerApp(pkt: UdpPacket): Owner? {
+    private fun ownerApp(pkt: UdpPacket): AppOwner? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         return try {
             val cm = getSystemService(ConnectivityManager::class.java)
@@ -274,15 +264,15 @@ class AdBlockVpnService : VpnService() {
         }
     }
 
-    private fun ownerFor(uid: Int): Owner {
+    private fun ownerFor(uid: Int): AppOwner {
         val pkgs = packageManager.getPackagesForUid(uid)
-        if (pkgs.isNullOrEmpty()) return Owner(null, if (uid == 1000) "Android 시스템" else "UID $uid")
+        if (pkgs.isNullOrEmpty()) return AppOwner(null, if (uid == 1000) "Android 시스템" else "UID $uid")
         val label = try {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkgs[0], 0)).toString()
         } catch (e: Exception) {
             pkgs[0]
         }
-        return Owner(pkgs[0], label)
+        return AppOwner(pkgs[0], label)
     }
 
     // ---------------- 알림 ----------------
@@ -325,7 +315,7 @@ class AdBlockVpnService : VpnService() {
 
     private fun updateNotification() {
         val now = System.currentTimeMillis()
-        if (now - lastNotify < 10_000) return // 알림 갱신은 10초에 한 번만
+        if (now - lastNotify < 30_000) return // 알림 갱신은 30초에 한 번만
         lastNotify = now
         try {
             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification())

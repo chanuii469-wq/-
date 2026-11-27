@@ -3,7 +3,7 @@ package com.adlull.android.dns
 /**
  * 업스트림 DNS 응답 캐시 (LRU + TTL + 낙관적 캐시).
  * - 같은 도메인을 반복 조회하면 네트워크 왕복 없이 바로 응답
- * - 만료된 항목도 하루 동안은 일단 바로 돌려주고(TTL 10초) 뒤에서 새로 받아 옴 (낙관적 캐시)
+ * - 만료된 항목도 1시간 동안은 일단 바로 돌려주고(TTL 10초) 뒤에서 새로 받아 옴 (낙관적 캐시)
  * - 돌려줄 때 TTL을 남은 시간으로 고쳐 써서 앱이 너무 오래 캐시하지 않게 함
  */
 class DnsCache(private val maxEntries: Int = 8192) {
@@ -58,7 +58,7 @@ class DnsCache(private val maxEntries: Int = 8192) {
 
     companion object {
         private const val MAX_TTL = 3600L
-        private const val STALE_MS = 24 * 3600 * 1000L
+        private const val STALE_MS = 3600 * 1000L // 만료 후 1시간까지만 (오래된 CDN 주소 방지)
         private const val STALE_TTL = 10L
         private const val TYPE_OPT = 41
 

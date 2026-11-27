@@ -14,8 +14,8 @@ android {
         applicationId = "com.adlull.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.4.3"
+        versionCode = 10
+        versionName = "1.5.0"
     }
 
     // 서명 키: android/keystore.properties 파일 또는 환경변수(CI)에서 읽음. 없으면 디버그 키로 서명
