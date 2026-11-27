@@ -1,4 +1,4 @@
-package com.adshield.android.dns
+package com.adlull.android.dns
 
 /** IPv4 + UDP 패킷 파싱/생성 (DNS 처리에 필요한 최소 기능) */
 class UdpPacket(

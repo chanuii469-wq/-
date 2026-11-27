@@ -1,24 +1,29 @@
-package com.adshield.android
+package com.adlull.android
 
-import com.adshield.android.dns.DnsPackets
-import com.adshield.android.dns.IpPackets
-import com.adshield.android.filter.Blocklist
-import com.adshield.android.filter.UserRule
-import com.adshield.android.filter.UserRules
+import com.adlull.android.dns.DnsPackets
+import com.adlull.android.dns.IpPackets
+import com.adlull.android.filter.Blocklist
+import com.adlull.android.filter.UserRule
+import com.adlull.android.filter.UserRules
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.adlull.android.dns.DnsCache
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 
 class FilterAndDnsTest {
 
     private fun list(vararg lines: String): Blocklist {
-        val b = HashMap<String, Int>(); val a = HashSet<String>()
-        lines.forEach { Blocklist.parseLine(it, b, a) }
-        return Blocklist(b, a)
+        val b = Blocklist.Builder()
+        lines.forEach { Blocklist.parseLine(it, b) }
+        return b.build()
     }
 
     @Test fun parsesCommonFormats() {
@@ -100,11 +105,11 @@ class FilterAndDnsTest {
     }
 
     @Test fun categoriesCombine() {
-        val b = HashMap<String, Int>(); val a = HashSet<String>()
-        Blocklist.parseLine("ads.com", b, a, Blocklist.ADS)
-        Blocklist.parseLine("t.ads.com", b, a, Blocklist.TRACKERS)
-        Blocklist.parseLine("tracker.io", b, a, Blocklist.TRACKERS)
-        val bl = Blocklist(b, a)
+        val b = Blocklist.Builder()
+        Blocklist.parseLine("ads.com", b, Blocklist.ADS)
+        Blocklist.parseLine("t.ads.com", b, Blocklist.TRACKERS)
+        Blocklist.parseLine("tracker.io", b, Blocklist.TRACKERS)
+        val bl = b.build()
         assertEquals(Blocklist.ADS, bl.match("x.ads.com"))
         assertEquals(Blocklist.ADS or Blocklist.TRACKERS, bl.match("t.ads.com"))
         assertEquals(Blocklist.TRACKERS, bl.match("tracker.io"))
@@ -127,5 +132,80 @@ class FilterAndDnsTest {
         assertEquals("@@||ok.com^", UserRules.normalize("ok.com", true))
         assertEquals("@@||ok.com^", UserRules.normalize("@@||ok.com^", false))
         assertNull(UserRules.normalize("not a domain", false))
+    }
+
+    @Test fun sizeCountsUniqueAcrossCategories() {
+        val b = Blocklist.Builder()
+        Blocklist.parseLine("a.com", b, Blocklist.ADS)
+        Blocklist.parseLine("a.com", b, Blocklist.TRACKERS)
+        Blocklist.parseLine("a.com", b, Blocklist.ADS)
+        Blocklist.parseLine("b.com", b, Blocklist.USER)
+        assertEquals(2, b.build().size)
+    }
+
+    @Test fun serializeRoundTrip() {
+        val b = Blocklist.Builder()
+        listOf("ads.com", "x.net").forEach { Blocklist.parseLine(it, b) }
+        Blocklist.parseLine("tr.io", b, Blocklist.TRACKERS)
+        Blocklist.parseLine("@@||ok.ads.com^", b)
+        val bl = b.build()
+        val bytes = ByteArrayOutputStream().also { DataOutputStream(it).use { o -> bl.writeTo(o) } }.toByteArray()
+        val back = Blocklist.readFrom(DataInputStream(ByteArrayInputStream(bytes)))
+        assertEquals(bl.size, back.size)
+        assertEquals(Blocklist.ADS, back.match("m.ads.com"))
+        assertEquals(Blocklist.TRACKERS, back.match("tr.io"))
+        assertEquals(0, back.match("ok.ads.com"))
+    }
+
+    private fun answer(query: ByteArray, ttl: Int, rcode: Int = 0, an: Int = 1): ByteArray {
+        val r = query.copyOf(query.size + if (an > 0) 16 else 0)
+        r[2] = 0x81.toByte(); r[3] = (0x80 or rcode).toByte(); r[7] = an.toByte()
+        if (an > 0) {
+            val p = query.size
+            r[p] = 0xC0.toByte(); r[p + 1] = 0x0C; r[p + 3] = 1; r[p + 5] = 1
+            r[p + 6] = (ttl shr 24).toByte(); r[p + 7] = (ttl shr 16).toByte(); r[p + 8] = (ttl shr 8).toByte(); r[p + 9] = ttl.toByte()
+            r[p + 11] = 4; r[p + 12] = 93
+        }
+        return r
+    }
+
+    @Test fun dnsCacheTtl() {
+        val q = dnsQuery("a.com", 1)
+        assertEquals(300L, DnsCache.cacheTtl(answer(q, 300)))
+        assertEquals(3600L, DnsCache.cacheTtl(answer(q, 999_999)))
+        assertEquals(60L, DnsCache.cacheTtl(answer(q, 0, rcode = 3, an = 0)))
+        assertNull(DnsCache.cacheTtl(answer(q, 300, rcode = 2)))
+        val tc = answer(q, 300); tc[2] = (tc[2].toInt() or 0x02).toByte()
+        assertNull(DnsCache.cacheTtl(tc))
+    }
+
+    @Test fun dnsCacheHitRewritesIdAndExpires() {
+        val cache = DnsCache()
+        val q1 = dnsQuery("a.com", 1)
+        val parsed = DnsPackets.parse(q1)!!
+        cache.put(parsed, answer(q1, 10), "s", now = 0)
+        val q2 = q1.copyOf(); q2[0] = 0x55; q2[1] = 0x66
+        val hit = cache.get(q2, parsed, "s", now = 5_000)!!
+        assertEquals(0x55.toByte(), hit[0]); assertEquals(0x66.toByte(), hit[1])
+        assertNull(cache.get(q2, parsed, "other", now = 5_000))
+        assertNull(cache.get(q2, parsed, "s", now = 11_000))
+    }
+
+    /** 30만 도메인 컴파일 시간·조회 속도 확인 (실패 기준은 넉넉하게) */
+    @Test fun benchmarkLargeList() {
+        val lines = (0 until 300_000).map { "0.0.0.0 host$it.ads-network${it % 977}.com" }
+        val t0 = System.nanoTime()
+        val b = Blocklist.Builder()
+        lines.forEach { Blocklist.parseLine(it, b) }
+        val bl = b.build()
+        val compileMs = (System.nanoTime() - t0) / 1_000_000
+        val t1 = System.nanoTime()
+        var hits = 0
+        repeat(100_000) { if (bl.isBlocked("cdn.host$it.ads-network${it % 977}.com")) hits++ }
+        val lookupUs = (System.nanoTime() - t1) / 1000.0 / 100_000
+        println("BENCH compile=${compileMs}ms lookup=${"%.2f".format(lookupUs)}us size=${bl.size}")
+        assertEquals(300_000, bl.size)
+        assertEquals(100_000, hits)
+        assertTrue(compileMs < 20_000)
     }
 }

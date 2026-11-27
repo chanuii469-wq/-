@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -87,7 +87,7 @@ fun LicensesScreen(modifier: Modifier, onBack: () -> Unit) {
             items(FILTER_LISTS) { NoticeRow(it, null) }
             item {
                 Text(
-                    "AdShield의 내장 차단 목록은 광고·추적 서버의 도메인 이름을 직접 정리한 것입니다.",
+                    "Adlull의 내장 차단 목록은 광고·추적 서버의 도메인 이름을 직접 정리한 것입니다.",
                     Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

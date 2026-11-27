@@ -1,4 +1,4 @@
-package com.adshield.android.vpn
+package com.adlull.android.vpn
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent
@@ -9,8 +9,8 @@ import android.net.VpnService
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import com.adshield.android.Stats
-import com.adshield.android.ui.MainActivity
+import com.adlull.android.Stats
+import com.adlull.android.ui.MainActivity
 
 /** 빠른 설정 타일로 켜고 끄기 */
 class QuickTileService : TileService() {

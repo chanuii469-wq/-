@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -41,9 +41,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adshield.android.LogEntry
-import com.adshield.android.Stats
-import com.adshield.android.filter.FilterManager
+import com.adlull.android.LogEntry
+import com.adlull.android.Stats
+import com.adlull.android.filter.FilterManager
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date

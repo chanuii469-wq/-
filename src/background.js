@@ -71,7 +71,7 @@ async function applySettings() {
     displayActionCountAsBadgeText: s.enabled,
   });
   await chrome.action.setBadgeBackgroundColor({ color: "#2e7d32" });
-  await chrome.action.setTitle({ title: s.enabled ? "AdShield (켜짐)" : "AdShield (꺼짐)" });
+  await chrome.action.setTitle({ title: s.enabled ? "Adlull (켜짐)" : "Adlull (꺼짐)" });
 }
 
 function isSiteAllowed(settings, parsed, host) {

@@ -1,4 +1,4 @@
-package com.adshield.android.filter
+package com.adlull.android.filter
 
 import android.content.Context
 import androidx.work.Constraints
@@ -10,7 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.adshield.android.Prefs
+import com.adlull.android.Prefs
 import java.util.concurrent.TimeUnit
 
 class FilterUpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {

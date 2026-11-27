@@ -1,10 +1,10 @@
-package com.adshield.android.vpn
+package com.adlull.android.vpn
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
-import com.adshield.android.Prefs
+import com.adlull.android.Prefs
 
 /** 재부팅/업데이트 후 자동으로 다시 켜기 */
 class BootReceiver : BroadcastReceiver() {

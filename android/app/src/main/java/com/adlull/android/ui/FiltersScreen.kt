@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -41,16 +41,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adshield.android.Prefs
+import com.adlull.android.Prefs
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.mutableIntStateOf
-import com.adshield.android.filter.Blocklist
-import com.adshield.android.filter.FilterManager
-import com.adshield.android.filter.UserRules
+import com.adlull.android.filter.Blocklist
+import com.adlull.android.filter.FilterManager
+import com.adlull.android.filter.UserRules
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date

@@ -1,7 +1,7 @@
 // 요소 숨김(코스메틱 필터) + 요소 선택기
 (() => {
-  if (window.__adshieldLoaded) return;
-  window.__adshieldLoaded = true;
+  if (window.__adlullLoaded) return;
+  window.__adlullLoaded = true;
 
   // 일반적인 광고 영역 선택자
   const GENERIC_SELECTORS = [
@@ -58,26 +58,31 @@
   function injectStyle(css) {
     if (!styleEl) {
       styleEl = document.createElement("style");
-      styleEl.id = "adshield-cosmetic";
+      styleEl.id = "adlull-cosmetic";
     }
     styleEl.textContent = css;
     const parent = document.head || document.documentElement;
     if (parent && !styleEl.isConnected) parent.appendChild(styleEl);
   }
 
+  let lastCount = -1;
+
   function countHidden() {
+    countTimer = null;
+    // 선택자를 하나로 합쳐 DOM을 한 번만 탐색 (선택자는 init에서 이미 검증됨)
     let n = 0;
-    for (const sel of selectors) {
-      try {
-        n += document.querySelectorAll(sel).length;
-      } catch {}
-    }
+    try {
+      n = selectors.length ? document.querySelectorAll(selectors.join(",")).length : 0;
+    } catch {}
+    if (n === lastCount) return; // 바뀌지 않았으면 메시지 생략
+    lastCount = n;
     chrome.runtime.sendMessage({ type: "cosmeticCount", count: n }).catch(() => {});
   }
 
+  // 디바운스 대신 스로틀: DOM이 계속 바뀌는 페이지에서도 최대 1초에 한 번만 계산
   function scheduleCount() {
-    clearTimeout(countTimer);
-    countTimer = setTimeout(countHidden, 800);
+    if (countTimer) return;
+    countTimer = setTimeout(countHidden, 1000);
   }
 
   async function init() {
@@ -93,9 +98,10 @@
     injectStyle(buildCss(selectors));
 
     // 페이지가 <head>를 갈아끼워도 스타일이 유지되도록 감시
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations) => {
       if (styleEl && !styleEl.isConnected) injectStyle(styleEl.textContent);
-      scheduleCount();
+      // 노드가 추가된 경우에만 다시 계산
+      if (mutations.some((m) => m.addedNodes.length)) scheduleCount();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
 

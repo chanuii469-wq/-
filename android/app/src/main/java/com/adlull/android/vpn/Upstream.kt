@@ -1,11 +1,11 @@
-package com.adshield.android.vpn
+package com.adlull.android.vpn
 
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.VpnService
-import com.adshield.android.Prefs
-import com.adshield.android.UpstreamDns
+import com.adlull.android.Prefs
+import com.adlull.android.UpstreamDns
 import java.io.ByteArrayOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -20,12 +20,17 @@ class Upstream(private val service: VpnService) {
     @Volatile private var sysDns: List<InetAddress> = emptyList()
     @Volatile private var sysDnsAt = 0L
 
+    /** 캐시를 구분하기 위한 현재 업스트림 이름 */
+    fun scope(): String = Prefs.hot.let { "${it.upstream.name}:${it.useDoh}" }
+
     fun resolve(query: ByteArray): ByteArray? {
-        val u = Prefs.upstream
-        if (u != UpstreamDns.SYSTEM && Prefs.useDoh && u.dohUrl != null) {
+        val hot = Prefs.hot
+        val u = hot.upstream
+        if (u != UpstreamDns.SYSTEM && hot.useDoh && u.dohUrl != null) {
             doh(u.dohUrl, query)?.let { return it }
         }
-        val servers = if (u == UpstreamDns.SYSTEM) systemDns() else listOf(InetAddress.getByName(u.ip))
+        // 주 서버 → 보조 서버 → IPv6 순서로 시도 (IPv6 전용 망 대응)
+        val servers = if (u == UpstreamDns.SYSTEM) systemDns() else u.ips.map { InetAddress.getByName(it) }
         for (s in servers) udp(s, query)?.let { return it }
         return null
     }
@@ -33,7 +38,7 @@ class Upstream(private val service: VpnService) {
     private fun udp(server: InetAddress, query: ByteArray): ByteArray? = try {
         DatagramSocket().use { sock ->
             service.protect(sock)
-            sock.soTimeout = 5000
+            sock.soTimeout = 2500
             sock.send(DatagramPacket(query, query.size, server, 53))
             val buf = ByteArray(4096)
             val p = DatagramPacket(buf, buf.size)
@@ -77,7 +82,7 @@ class Upstream(private val service: VpnService) {
                 !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
             ) cm.getLinkProperties(n)?.dnsServers.orEmpty() else emptyList()
         }.distinct()
-        sysDns = list.ifEmpty { listOf(InetAddress.getByName("1.1.1.1")) }
+        sysDns = list.ifEmpty { UpstreamDns.CLOUDFLARE.ips.map { InetAddress.getByName(it) } }
         sysDnsAt = now
         return sysDns
     }

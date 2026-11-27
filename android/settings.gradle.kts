@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "AdShield"
+rootProject.name = "Adlull"
 include(":app")

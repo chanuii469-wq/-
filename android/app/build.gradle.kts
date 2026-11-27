@@ -7,25 +7,25 @@ plugins {
 }
 
 android {
-    namespace = "com.adshield.android"
+    namespace = "com.adlull.android"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.adshield.android"
+        applicationId = "com.adlull.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
     }
 
     // 서명 키: android/keystore.properties 파일 또는 환경변수(CI)에서 읽음. 없으면 디버그 키로 서명
     val signing = Properties().apply {
         val f = rootProject.file("keystore.properties")
         if (f.exists()) f.inputStream().use { load(it) }
-        System.getenv("ADSHIELD_STORE_FILE")?.let { put("storeFile", it) }
-        System.getenv("ADSHIELD_STORE_PASSWORD")?.let { put("storePassword", it) }
-        System.getenv("ADSHIELD_KEY_ALIAS")?.let { put("keyAlias", it) }
-        System.getenv("ADSHIELD_KEY_PASSWORD")?.let { put("keyPassword", it) }
+        System.getenv("ADLULL_STORE_FILE")?.let { put("storeFile", it) }
+        System.getenv("ADLULL_STORE_PASSWORD")?.let { put("storePassword", it) }
+        System.getenv("ADLULL_KEY_ALIAS")?.let { put("keyAlias", it) }
+        System.getenv("ADLULL_KEY_PASSWORD")?.let { put("keyPassword", it) }
     }
     val hasReleaseKey = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { !signing.getProperty(it).isNullOrBlank() }
 

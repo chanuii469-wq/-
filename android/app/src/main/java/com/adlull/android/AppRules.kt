@@ -1,4 +1,4 @@
-package com.adshield.android
+package com.adlull.android
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

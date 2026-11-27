@@ -55,5 +55,6 @@ $("options").addEventListener("click", () => chrome.runtime.openOptionsPage());
 (async () => {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   await refresh();
-  setInterval(refresh, 1500);
+  // 팝업이 열려 있고 보이는 동안만 갱신
+  setInterval(() => document.visibilityState === "visible" && refresh(), 1500);
 })();

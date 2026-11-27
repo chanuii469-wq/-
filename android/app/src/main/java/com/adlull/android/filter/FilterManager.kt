@@ -1,9 +1,9 @@
-package com.adshield.android.filter
+package com.adlull.android.filter
 
 import android.content.Context
 import android.util.Log
-import com.adshield.android.Prefs
-import com.adshield.android.Stats
+import com.adlull.android.Prefs
+import com.adlull.android.Stats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +12,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -33,11 +37,12 @@ data class FilterSub(
 object FilterManager {
     private const val TAG = "FilterManager"
     private const val MAX_BYTES = 40L * 1024 * 1024
+    private const val CACHE_VERSION = "v1"
 
     private val DEFAULTS = listOf(
-        FilterSub("builtin_ads", "AdShield 기본 광고 목록", "asset:default_ads.txt", "앱 광고 SDK·국내외 광고 네트워크 (내장)"),
+        FilterSub("builtin_ads", "Adlull 기본 광고 목록", "asset:default_ads.txt", "앱 광고 SDK·국내외 광고 네트워크 (내장)"),
         FilterSub(
-            "builtin_trackers", "AdShield 기본 추적기 목록", "asset:default_trackers.txt",
+            "builtin_trackers", "Adlull 기본 추적기 목록", "asset:default_trackers.txt",
             "분석·추적 도구 (내장)", category = Blocklist.TRACKERS,
         ),
         FilterSub(
@@ -188,7 +193,7 @@ object FilterManager {
                     connectTimeout = 15_000
                     readTimeout = 60_000
                     instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "AdShield/1.0 (Android)")
+                    setRequestProperty("User-Agent", "Adlull/1.0 (Android)")
                 }
                 val code = conn.responseCode
                 if (code in 300..399 && redirects++ < 5) {
@@ -214,11 +219,11 @@ object FilterManager {
             }
             conn.disconnect()
             // 규칙 수 계산
-            val b = HashMap<String, Int>(); val a = HashSet<String>()
-            tmp.useLines { seq -> seq.forEach { Blocklist.parseLine(it, b, a) } }
-            if (b.isEmpty() && a.isEmpty()) throw IllegalStateException("no rules")
+            var rules = 0
+            tmp.useLines { seq -> seq.forEach { if (Blocklist.parseRule(it) != null) rules++ } }
+            if (rules == 0) throw IllegalStateException("no rules")
             tmp.renameTo(fileFor(s))
-            update(s.id) { it.copy(lastUpdated = System.currentTimeMillis(), ruleCount = b.size + a.size) }
+            update(s.id) { it.copy(lastUpdated = System.currentTimeMillis(), ruleCount = rules) }
             true
         } catch (e: Exception) {
             Log.w(TAG, "download failed: ${s.url}", e)
@@ -226,30 +231,63 @@ object FilterManager {
         }
     }
 
-    /** 켜진 모든 목록 + 사용자 규칙으로 차단 목록을 다시 만듦 */
+    private fun cacheFile() = File(appCtx.filesDir, "compiled.bin")
+
+    /** 현재 필터 구성을 나타내는 서명. 바뀌면 캐시를 다시 만든다. */
+    private fun signature(): String = buildString {
+        append(CACHE_VERSION)
+        for (s in _subs.value.filter { it.enabled }) {
+            append('|').append(s.id).append(':').append(s.category).append(':')
+            append(if (s.remote) fileFor(s).let { "${it.length()}-${it.lastModified()}" } else s.url)
+        }
+        append('|').append(Prefs.userRules.hashCode())
+    }
+
+    /** 켜진 모든 목록 + 사용자 규칙으로 차단 목록을 다시 만듦. 바뀐 게 없으면 컴파일된 캐시를 읽음. */
     suspend fun rebuild() = mutex.withLock {
         withContext(Dispatchers.IO) {
-            val block = HashMap<String, Int>(200_000)
-            val allow = HashSet<String>()
-            for (s in _subs.value.filter { it.enabled }) {
-                try {
-                    if (s.url?.startsWith("asset:") == true) {
-                        var n = 0
-                        appCtx.assets.open(s.url.removePrefix("asset:")).bufferedReader().useLines { seq ->
-                            seq.forEach { n += Blocklist.parseLine(it, block, allow, s.category) }
-                        }
-                        if (s.ruleCount == 0) update(s.id) { it.copy(ruleCount = n) }
-                    } else {
-                        val f = fileFor(s)
-                        if (f.exists()) f.useLines { seq -> seq.forEach { Blocklist.parseLine(it, block, allow, s.category) } }
+            val sig = signature()
+            val cached = runCatching {
+                DataInputStream(BufferedInputStream(cacheFile().inputStream(), 1 shl 16)).use { input ->
+                    if (input.readUTF() == sig) Blocklist.readFrom(input) else null
+                }
+            }.getOrNull()
+            val list = cached ?: compile().also { bl ->
+                runCatching {
+                    val tmp = File(appCtx.filesDir, "compiled.tmp")
+                    DataOutputStream(BufferedOutputStream(tmp.outputStream(), 1 shl 16)).use { out ->
+                        out.writeUTF(sig)
+                        bl.writeTo(out)
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "load failed: ${s.id}", e)
+                    tmp.renameTo(cacheFile())
                 }
             }
-            UserRules.activeLines(Prefs.userRules).forEach { Blocklist.parseLine(it, block, allow, Blocklist.USER) }
-            Stats.blocklist = Blocklist(block, allow)
-            _ruleCount.value = block.size
+            Stats.blocklist = list
+            _ruleCount.value = list.size
         }
+    }
+
+    private fun compile(): Blocklist {
+        val builder = Blocklist.Builder()
+        for (s in _subs.value.filter { it.enabled }) {
+            try {
+                if (s.url?.startsWith("asset:") == true) {
+                    var n = 0
+                    appCtx.assets.open(s.url.removePrefix("asset:")).bufferedReader().useLines { seq ->
+                        seq.forEach { n += Blocklist.parseLine(it, builder, s.category) }
+                    }
+                    if (s.ruleCount == 0) update(s.id) { it.copy(ruleCount = n) }
+                } else {
+                    val f = fileFor(s)
+                    if (f.exists()) f.bufferedReader().useLines { seq ->
+                        seq.forEach { Blocklist.parseLine(it, builder, s.category) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "load failed: ${s.id}", e)
+            }
+        }
+        UserRules.activeLines(Prefs.userRules).forEach { Blocklist.parseLine(it, builder, Blocklist.USER) }
+        return builder.build()
     }
 }

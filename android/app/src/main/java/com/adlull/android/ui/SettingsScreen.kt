@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.content.Intent
 import android.provider.Settings
@@ -28,10 +28,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adshield.android.Prefs
-import com.adshield.android.Stats
-import com.adshield.android.UpstreamDns
-import com.adshield.android.filter.FilterUpdateWorker
+import com.adlull.android.Prefs
+import com.adlull.android.Stats
+import com.adlull.android.UpstreamDns
+import com.adlull.android.filter.FilterUpdateWorker
 
 @Composable
 fun SettingsScreen(modifier: Modifier) {
@@ -41,8 +41,13 @@ fun SettingsScreen(modifier: Modifier) {
     val v by Prefs.version.collectAsStateWithLifecycle()
     var confirmReset by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
+    var showPrivacy by remember { mutableStateOf(false) }
     if (showLicenses) {
         LicensesScreen(modifier) { showLicenses = false }
+        return
+    }
+    if (showPrivacy) {
+        PrivacyScreen(modifier) { showPrivacy = false }
         return
     }
 
@@ -79,7 +84,7 @@ fun SettingsScreen(modifier: Modifier) {
         HorizontalDivider()
         Header("시작")
         SwitchRow("부팅 시 자동 시작", "휴대폰을 켜면 마지막 상태대로 보호를 다시 켜요", Prefs.autoStart) { Prefs.autoStart = it }
-        ClickRow("상시 VPN 설정", "시스템 VPN 설정에서 AdShield를 '상시 사용'으로 지정하면 꺼지지 않아요") {
+        ClickRow("상시 VPN 설정", "시스템 VPN 설정에서 Adlull를 '상시 사용'으로 지정하면 꺼지지 않아요") {
             ctx.startActivity(Intent(Settings.ACTION_VPN_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
 
@@ -89,10 +94,11 @@ fun SettingsScreen(modifier: Modifier) {
 
         HorizontalDivider()
         Header("정보")
+        ClickRow("개인정보 처리방침", "Adlull은 개인정보를 수집하지 않아요") { showPrivacy = true }
         ClickRow("오픈소스 라이선스", "앱에 쓰인 라이브러리와 필터 목록의 저작권·라이선스") { showLicenses = true }
 
         Text(
-            "AdShield ${com.adshield.android.BuildConfig.VERSION_NAME} · DNS 기반 광고 차단\n유튜브 영상 광고처럼 콘텐츠와 같은 서버에서 나오는 광고는 DNS로 막을 수 없어요.",
+            "Adlull ${com.adlull.android.BuildConfig.VERSION_NAME} · DNS 기반 광고 차단\n유튜브 영상 광고처럼 콘텐츠와 같은 서버에서 나오는 광고는 DNS로 막을 수 없어요.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(16.dp),

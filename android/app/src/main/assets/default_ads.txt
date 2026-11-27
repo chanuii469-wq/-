@@ -1,4 +1,4 @@
-! AdShield 기본 광고 목록
+! Adlull 기본 광고 목록
 doubleclick.net
 googlesyndication.com
 googleadservices.com

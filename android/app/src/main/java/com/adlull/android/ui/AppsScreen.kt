@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.Manifest
 import android.content.pm.ApplicationInfo
@@ -54,11 +54,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adshield.android.AppRule
-import com.adshield.android.AppRules
-import com.adshield.android.Prefs
-import com.adshield.android.Stats
-import com.adshield.android.vpn.AdBlockVpnService
+import com.adlull.android.AppRule
+import com.adlull.android.AppRules
+import com.adlull.android.Prefs
+import com.adlull.android.Stats
+import com.adlull.android.vpn.AdBlockVpnService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -120,7 +120,7 @@ fun AppsScreen(modifier: Modifier) {
             modifier = Modifier.padding(start = 16.dp, top = 16.dp),
         )
         Text(
-            "스위치로 앱마다 AdShield 적용 여부를 정하고, 앱을 누르면 광고·추적기 차단을 따로 설정할 수 있어요.",
+            "스위치로 앱마다 Adlull 적용 여부를 정하고, 앱을 누르면 광고·추적기 차단을 따로 설정할 수 있어요.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -216,7 +216,7 @@ private fun AppDetail(
             }
 
             DetailSwitch(
-                "AdShield 적용", "끄면 이 앱의 트래픽이 AdShield를 전혀 거치지 않아요 (은행·결제 앱 문제 해결용)",
+                "Adlull 적용", "끄면 이 앱의 트래픽이 Adlull를 전혀 거치지 않아요 (은행·결제 앱 문제 해결용)",
                 applied, true, onApplied,
             )
             HorizontalDivider(Modifier.padding(horizontal = 16.dp))
@@ -235,7 +235,7 @@ private fun AppDetail(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     Text(
-                        "Android 10 미만에서는 요청한 앱을 알 수 없어 광고/추적기/기록 개별 설정을 쓸 수 없어요. 'AdShield 적용'은 동작해요.",
+                        "Android 10 미만에서는 요청한 앱을 알 수 없어 광고/추적기/기록 개별 설정을 쓸 수 없어요. 'Adlull 적용'은 동작해요.",
                         Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall,
                     )
                 }

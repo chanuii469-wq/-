@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.content.Context
 import android.content.Intent
@@ -45,9 +45,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adshield.android.Stats
-import com.adshield.android.filter.FilterManager
-import com.adshield.android.vpn.AdBlockVpnService
+import com.adlull.android.Stats
+import com.adlull.android.filter.FilterManager
+import com.adlull.android.vpn.AdBlockVpnService
 import kotlinx.coroutines.delay
 
 @Composable

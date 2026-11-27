@@ -1,4 +1,4 @@
-! AdShield 기본 추적기 목록
+! Adlull 기본 추적기 목록
 google-analytics.com
 googletagmanager.com
 scorecardresearch.com

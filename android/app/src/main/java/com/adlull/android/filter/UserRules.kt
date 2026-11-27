@@ -1,4 +1,4 @@
-package com.adshield.android.filter
+package com.adlull.android.filter
 
 /** 사용자 규칙 한 줄. 꺼진 규칙은 "!- " 주석으로 저장해 텍스트 편집과 호환된다. */
 data class UserRule(val rule: String, val enabled: Boolean) {

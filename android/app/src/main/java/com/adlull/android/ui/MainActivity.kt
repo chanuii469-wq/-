@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.Manifest
 import android.content.Intent
@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.adshield.android.vpn.AdBlockVpnService
+import com.adlull.android.vpn.AdBlockVpnService
 
 class MainActivity : ComponentActivity() {
 
@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
 
         if (intent?.getBooleanExtra(EXTRA_START, false) == true) startProtection()
 
-        setContent { AdShieldTheme { AppRoot(onStart = ::startProtection) } }
+        setContent { AdlullTheme { AppRoot(onStart = ::startProtection) } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -115,7 +115,7 @@ private fun AppRoot(onStart: () -> Unit) {
 val Brand = Color(0xFF2E7D32)
 
 @Composable
-fun AdShieldTheme(content: @Composable () -> Unit) {
+fun AdlullTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val ctx = LocalContext.current
     val scheme = when {

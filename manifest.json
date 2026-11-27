@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "AdShield - 광고 차단기",
+  "name": "Adlull - 광고 차단기",
   "version": "1.0.0",
   "description": "광고, 추적기, 팝업을 차단하는 가벼운 광고 차단 확장 프로그램",
   "permissions": [
@@ -44,7 +44,7 @@
   ],
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "AdShield",
+    "default_title": "Adlull",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

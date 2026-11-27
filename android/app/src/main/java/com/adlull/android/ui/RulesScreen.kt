@@ -1,4 +1,4 @@
-package com.adshield.android.ui
+package com.adlull.android.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -44,10 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adshield.android.Prefs
-import com.adshield.android.filter.FilterManager
-import com.adshield.android.filter.UserRule
-import com.adshield.android.filter.UserRules
+import com.adlull.android.Prefs
+import com.adlull.android.filter.FilterManager
+import com.adlull.android.filter.UserRule
+import com.adlull.android.filter.UserRules
 import kotlinx.coroutines.launch
 
 /** 사용자 규칙을 한 줄씩 켜고 끄는 화면 */

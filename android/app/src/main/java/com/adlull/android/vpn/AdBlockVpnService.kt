@@ -1,4 +1,4 @@
-package com.adshield.android.vpn
+package com.adlull.android.vpn
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -17,23 +17,26 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.adshield.android.AppRule
-import com.adshield.android.AppRules
-import com.adshield.android.Prefs
-import com.adshield.android.R
-import com.adshield.android.Stats
-import com.adshield.android.dns.DnsPackets
-import com.adshield.android.dns.IpPackets
-import com.adshield.android.dns.UdpPacket
-import com.adshield.android.filter.Blocklist
-import com.adshield.android.ui.MainActivity
+import com.adlull.android.AppRule
+import com.adlull.android.AppRules
+import com.adlull.android.Prefs
+import com.adlull.android.R
+import com.adlull.android.Stats
+import com.adlull.android.dns.DnsCache
+import com.adlull.android.dns.DnsPackets
+import com.adlull.android.dns.IpPackets
+import com.adlull.android.dns.UdpPacket
+import com.adlull.android.filter.Blocklist
+import com.adlull.android.ui.MainActivity
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /**
  * 로컬 VPN으로 기기의 DNS 질의만 가로채서 광고 도메인을 차단한다.
@@ -43,9 +46,9 @@ class AdBlockVpnService : VpnService() {
 
     companion object {
         private const val TAG = "AdBlockVpn"
-        const val ACTION_START = "com.adshield.START"
-        const val ACTION_STOP = "com.adshield.STOP"
-        const val ACTION_RESTART = "com.adshield.RESTART"
+        const val ACTION_START = "com.adlull.START"
+        const val ACTION_STOP = "com.adlull.STOP"
+        const val ACTION_RESTART = "com.adlull.RESTART"
         private const val VPN_ADDRESS = "10.111.222.2"
         private const val VPN_DNS = "10.111.222.1"
         private const val CHANNEL = "vpn"
@@ -66,13 +69,15 @@ class AdBlockVpnService : VpnService() {
     private var out: FileOutputStream? = null
     private lateinit var pool: ExecutorService
     private lateinit var upstream: Upstream
+    private val cache = DnsCache()
     private class Owner(val pkg: String?, val label: String)
     private val owners = ConcurrentHashMap<Int, Owner>()
     private var lastNotify = 0L
 
     override fun onCreate() {
         super.onCreate()
-        pool = Executors.newFixedThreadPool(8)
+        // 평소엔 스레드 4개, 느린 업스트림이 몰리면 최대 64개까지. 그 이상은 버림(앱이 재시도함)
+        pool = ThreadPoolExecutor(4, 64, 30, TimeUnit.SECONDS, SynchronousQueue(), ThreadPoolExecutor.DiscardPolicy())
         upstream = Upstream(this)
     }
 
@@ -148,6 +153,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun stopVpn() {
+        cache.clear()
         reader?.interrupt()
         reader = null
         runCatching { tun?.close() }
@@ -178,15 +184,19 @@ class AdBlockVpnService : VpnService() {
         val query = DnsPackets.parse(pkt.payload) ?: return
         val mask = Stats.blocklist.match(query.name)
         // 차단 후보이거나 기록이 켜져 있을 때만 요청한 앱을 조회 (binder 호출 비용 절약)
-        val owner = if (mask != 0 || Prefs.logQueries) ownerApp(pkt) else null
+        val hot = Prefs.hot
+        val owner = if (mask != 0 || hot.logQueries) ownerApp(pkt) else null
         val rule = owner?.pkg?.let { AppRules[it] } ?: AppRule()
         val blocked = (mask and (Blocklist.ADS or Blocklist.USER) != 0 && rule.ads) ||
             (mask and Blocklist.TRACKERS != 0 && rule.trackers)
 
         val response = if (blocked) {
-            DnsPackets.blockedResponse(pkt.payload, query, Prefs.nxdomain)
+            DnsPackets.blockedResponse(pkt.payload, query, hot.nxdomain)
         } else {
-            upstream.resolve(pkt.payload) ?: return
+            val scope = upstream.scope()
+            cache.get(pkt.payload, query, scope) ?: (upstream.resolve(pkt.payload) ?: return).also {
+                cache.put(query, it, scope)
+            }
         }
         write(IpPackets.buildUdp(pkt.dstIp, pkt.srcIp, pkt.dstPort, pkt.srcPort, response))
         Stats.record(query.name, query.qtype, blocked, owner?.label, owner?.pkg, rule.log)
