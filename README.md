@@ -49,11 +49,11 @@ Android SDK(API 35)와 JDK 17이 필요합니다.
 ### 서명 키
 릴리스 APK는 정식 서명 키로 서명합니다. 키 파일은 **저장소에 올리지 않습니다** (`.gitignore` 처리).
 
-- **직접 빌드할 때**: `adshield-release.jks`와 `keystore.properties`를 `android/` 폴더에 넣고 빌드
+- **직접 빌드할 때**: 키 파일(`.jks`)과 `keystore.properties`를 `android/` 폴더에 넣고 빌드. 키 파일 이름은 자유롭게 바꿔도 되고, 바꾸면 `keystore.properties`의 `storeFile=` 값만 같이 고치면 됩니다.
 - **GitHub Actions로 빌드할 때**: 저장소 Settings › Secrets and variables › Actions에 아래 4개를 등록
-  - `ADLULL_KEYSTORE_BASE64`: `base64 -w0 adshield-release.jks` 출력값
+  - `ADLULL_KEYSTORE_BASE64`: `base64 -w0 <키 파일>` 출력값
   - `ADLULL_STORE_PASSWORD`, `ADLULL_KEY_PASSWORD`: `keystore.properties`의 비밀번호
-  - `ADLULL_KEY_ALIAS`: `adshield`
+  - `ADLULL_KEY_ALIAS`: `adshield` (키 안에 저장된 별칭이라 바꾸면 안 됨)
 - 키가 없으면 디버그 키로 서명됩니다(이 경우 기존 앱 위에 덮어 설치 불가).
 - **키를 잃어버리면 같은 앱으로 업데이트할 수 없습니다.** 안전한 곳에 백업해 두세요.
 
