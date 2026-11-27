@@ -30,7 +30,7 @@
 - **빠른 설정 타일**, **부팅 시 자동 시작**, **상시 VPN** 지원
 
 ### 설치
-1. `Adlull-1.4.0.apk`를 휴대폰에 옮기거나, GitHub **Actions → Android APK → Adlull-apk** 에서 내려받습니다.
+1. GitHub 저장소의 **Releases**에서 `Adlull-버전.apk`를 내려받거나, 받은 APK 파일을 휴대폰으로 옮깁니다.
 2. 파일을 열고 "출처를 알 수 없는 앱 설치"를 허용해 설치합니다.
 3. 앱에서 방패를 누르고 VPN 연결 요청을 허용합니다.
 
@@ -66,6 +66,9 @@ Android SDK(API 35)와 JDK 17이 필요합니다.
   - `ADLULL_STORE_PASSWORD`, `ADLULL_KEY_PASSWORD`: `keystore.properties`의 비밀번호
   - `ADLULL_KEY_ALIAS`: `adshield` (키 안에 저장된 별칭이라 바꾸면 안 됨)
 - 키가 없으면 디버그 키로 서명됩니다(이 경우 기존 앱 위에 덮어 설치 불가).
+
+### 릴리스 올리기
+Secrets 4개를 등록한 뒤 **Actions › Release › Run workflow**에서 버전(예: `1.4.0`)을 입력해 실행하면, 정식 키로 서명된 APK와 크롬 확장 zip이 GitHub **Releases**에 올라갑니다. `v1.4.0` 같은 태그를 푸시해도 됩니다. Secrets가 없으면 디버그 키 APK가 올라가지 않도록 릴리스를 중단합니다.
 - **키를 잃어버리면 같은 앱으로 업데이트할 수 없습니다.** 안전한 곳에 백업해 두세요.
 
 ---

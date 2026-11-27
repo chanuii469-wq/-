@@ -1,0 +1,75 @@
+name: Release
+
+# Actions 탭 › Release › Run workflow 로 실행하거나, v로 시작하는 태그(v1.4.0 등)를 올리면 실행
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "버전 (예: 1.4.0)"
+        required: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: |
+          V="${{ github.event.inputs.version }}"
+          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      # 정식 키가 없으면 릴리스하지 않음 (디버그 키 APK는 기존 앱 위에 설치되지 않으므로)
+      - name: Check signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ADLULL_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ADLULL_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ADLULL_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ADLULL_KEY_PASSWORD }}
+        run: |
+          for v in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              echo "::error::저장소 Secrets에 ADLULL_${v} 가 없습니다. README의 '서명 키' 항목을 보고 등록하세요."
+              exit 1
+            fi
+          done
+          echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test & build
+        working-directory: android
+        env:
+          ADLULL_STORE_FILE: release.jks
+          ADLULL_STORE_PASSWORD: ${{ secrets.ADLULL_STORE_PASSWORD }}
+          ADLULL_KEY_ALIAS: ${{ secrets.ADLULL_KEY_ALIAS }}
+          ADLULL_KEY_PASSWORD: ${{ secrets.ADLULL_KEY_PASSWORD }}
+        run: ./gradlew testReleaseUnitTest assembleRelease
+      - name: Remove signing key
+        if: always()
+        run: rm -f android/release.jks
+      - name: Package
+        run: |
+          V=${{ steps.v.outputs.version }}
+          mkdir dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/Adlull-$V.apk"
+          zip -r "dist/Adlull-chrome-$V.zip" manifest.json rules icons src -x "*.DS_Store"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          name: Adlull ${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*
+          body: |
+            ### 설치
+            - **안드로이드**: `Adlull-${{ steps.v.outputs.version }}.apk`를 휴대폰에서 열어 설치 (기존 Adlull 위에 덮어 설치됨)
+            - **크롬 확장**: `Adlull-chrome-${{ steps.v.outputs.version }}.zip` 압축을 풀고 `chrome://extensions` › 개발자 모드 › 압축해제된 확장 프로그램 로드
+
+            문제가 있는 앱은 Adlull › 앱 탭에서 스위치를 꺼서 빼고 다시 실행해 보세요.
