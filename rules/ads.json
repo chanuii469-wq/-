@@ -1,0 +1,1336 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||doubleclick.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||googlesyndication.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||googleadservices.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adservice.google.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||pagead2.googlesyndication.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||googletagservices.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adnxs.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adsrvr.org^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||advertising.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||amazon-adsystem.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||criteo.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||criteo.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||taboola.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||outbrain.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||pubmatic.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||rubiconproject.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||openx.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 18,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||casalemedia.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 19,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||smartadserver.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 20,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||moatads.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 21,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||media.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 22,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||yieldmo.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 23,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sharethrough.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 24,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||teads.tv^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 25,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||33across.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 26,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||bidswitch.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 27,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||contextweb.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 28,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||indexww.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 29,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adform.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 30,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||serving-sys.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 31,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||revcontent.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 32,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||mgid.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 33,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||propellerads.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 34,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||popads.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 35,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||popcash.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 36,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adcash.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 37,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||exoclick.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 38,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||juicyads.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 39,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||zedo.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 40,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adroll.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 41,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||ads.yahoo.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 42,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adtech.de^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 43,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||spotxchange.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 44,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||springserve.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 45,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||lijit.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 46,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sovrn.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 47,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||gumgum.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 48,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||undertone.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 49,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adpnut.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 50,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||mobon.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 51,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||dable.io^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 52,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||realclick.co.kr^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 53,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||tenping.kr^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 54,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adop.cc^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 55,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||ad.daum.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 56,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||display.ad.daum.net^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 57,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adcr.naver.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 58,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||siape.veta.naver.com^",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "image",
+        "sub_frame",
+        "xmlhttprequest",
+        "media",
+        "font",
+        "stylesheet",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  }
+]

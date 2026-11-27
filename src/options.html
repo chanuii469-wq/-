@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>AdShield 설정</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>🛡️ AdShield 설정</h1>
+
+    <section>
+      <h2>보호를 끈 사이트</h2>
+      <p class="hint">이 목록의 사이트에서는 광고 차단이 동작하지 않습니다.</p>
+      <ul id="whitelist"></ul>
+      <form id="addSite">
+        <input id="siteInput" placeholder="example.com" autocomplete="off">
+        <button>추가</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>사용자 필터</h2>
+      <p class="hint">
+        한 줄에 하나씩 입력하세요.<br>
+        <code>||ads.example.com^</code> 도메인 차단 ·
+        <code>@@||example.com^</code> 사이트 허용 ·
+        <code>##.ad-box</code> 모든 사이트에서 요소 숨김 ·
+        <code>example.com##.sidebar</code> 특정 사이트에서 숨김 ·
+        <code>!</code> 주석
+      </p>
+      <textarea id="filters" spellcheck="false" rows="14"></textarea>
+      <div class="bar">
+        <button id="save">저장</button>
+        <span id="saved"></span>
+      </div>
+      <ul id="errors" class="errors"></ul>
+    </section>
+
+    <section>
+      <h2>통계</h2>
+      <p>누적 차단: <strong id="total">0</strong> <button id="resetStats" class="ghost">초기화</button></p>
+    </section>
+  </main>
+  <script src="options.js" type="module"></script>
+</body>
+</html>
